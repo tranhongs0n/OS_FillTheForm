@@ -127,17 +127,26 @@ function findSubmitButton(form) {
   // Extend search scope if inside a popup/dialog because buttons might be outside the <form>
   const scope = form.closest('[role="dialog"], .popup-dialog, .osui-popup') || form;
 
+  const isClickable = (btn) => {
+    return btn && 
+           btn.offsetParent !== null && 
+           !btn.classList.contains('display-none') && 
+           !btn.disabled &&
+           btn.getAttribute('aria-hidden') !== 'true' &&
+           btn.getAttribute('tabindex') !== '-1';
+  };
+
   let btn = scope.querySelector('[type="submit"]');
-  if (btn && btn.offsetParent !== null && !btn.classList.contains('display-none')) return btn; // Skip hidden submits
+  if (isClickable(btn)) return btn;
 
   const primaryClasses = ['.btn-primary', '.os-btn-primary', 'button.primary', '.ButtonVariant_Primary'];
   for (const sel of primaryClasses) {
     btn = scope.querySelector(sel);
-    if (btn && btn.offsetParent !== null) return btn;
+    if (isClickable(btn)) return btn;
   }
 
   const keywords = ['lưu', 'gửi', 'cập nhật', 'xác nhận', 'tạo mới', 'hoàn thành', 'save', 'submit', 'update', 'confirm'];
-  const allBtns = Array.from(scope.querySelectorAll('button, input[type="button"]')).filter(b => b.offsetParent !== null);
+  const allBtns = Array.from(scope.querySelectorAll('button, input[type="button"]')).filter(isClickable);
   return allBtns.find(b => {
     const txt = (b.innerText || b.value || '').toLowerCase();
     return keywords.some(k => txt.includes(k));
