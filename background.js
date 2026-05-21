@@ -14,7 +14,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             contents: [{
               parts: [{ text: `You are a form auto-filler. Return JSON only. Fill these forms based on labels and input types.
 Context: ${JSON.stringify(request.inputs)}
-Output format: A flat JSON object mapping input names or IDs to sample values: {"input_name_or_id": "sample_value"}` }]
+Rules:
+1. For <select> (dropdowns), choose exactly one 'value' from the provided 'options' list.
+2. For checkboxes/radio buttons, use boolean true/false.
+3. For text/email/etc, generate context-aware sample data.
+Output format: A flat JSON object mapping input names or IDs to values: {"input_name_or_id": "value"}` }]
             }]
           })
         });

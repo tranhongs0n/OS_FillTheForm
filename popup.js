@@ -38,7 +38,8 @@ scanBtn.addEventListener('click', async () => {
           totalFields += form.fields.length;
           html += `<div class="form-group">${form.name}</div>`;
           form.fields.forEach(f => {
-            html += `<div class="field-item">${f.label || f.name || 'Unnamed'} (${f.type})</div>`;
+            const detail = f.type === 'select-one' ? ` (${f.options.length} options)` : ` (${f.type})`;
+            html += `<div class="field-item">${f.label || f.name || 'Unnamed'}${detail}</div>`;
           });
           
           const option = document.createElement('option');
