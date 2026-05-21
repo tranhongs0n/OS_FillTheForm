@@ -188,6 +188,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
           if (el.classList.contains('vscomp-wrapper')) {
             const toggleBtn = el.querySelector('.vscomp-toggle-button') || el;
+            
+            // Ensure any previous dropdowns are closed and animations finished
+            await new Promise(r => setTimeout(r, 300)); 
+            
             toggleBtn.click(); // Open dropdown
             
             // Wait for options to render (polling up to 2 seconds)
@@ -196,8 +200,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             
             while (retries > 0 && !match) {
               await new Promise(r => setTimeout(r, 100));
-              const options = Array.from(document.querySelectorAll('.vscomp-option'));
-              match = options.find(o => o.innerText.trim() === val || o.getAttribute('data-value') === val);
+              
+              // Scope to specific dropbox if possible, else global
+              const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
+              const dropbox = dropboxId ? document.getElementById(dropboxId) : document;
+              
+              if (dropbox) {
+                const options = Array.from(dropbox.querySelectorAll('.vscomp-option'));
+                match = options.find(o => o.innerText.trim() === val || o.getAttribute('data-value') === val);
+              }
               retries--;
             }
 
@@ -207,6 +218,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             } else {
               toggleBtn.click(); // Close if not found after wait
             }
+            
+            // Wait for close animation and state update before moving to next field
+            await new Promise(r => setTimeout(r, 400));
           } else {
             if (el.tagName === 'SELECT') {
               const opt = Array.from(el.options).find(o => o.value == val || o.innerText == val);
