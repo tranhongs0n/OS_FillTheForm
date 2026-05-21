@@ -22,6 +22,8 @@ Quy tắc dữ liệu:
 
 async function performAutofill(inputs, tabId) {
   try {
+    chrome.tabs.sendMessage(tabId, {action: "notify", message: "Đang tạo dữ liệu mẫu..."});
+    
     const key = await chrome.storage.local.get('apiKey');
     if (!key.apiKey) {
       throw new Error("API Key missing. Please set it in Extension Options.");
@@ -41,7 +43,7 @@ Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSa
 Context form: ${JSON.stringify(inputs)}
 
 Rules:
-1. <select>: Chọn đúng 'value' từ 'options'.
+1. <select>: Chọn đúng 'value' from 'options'.
 2. Checkbox/Radio: boolean true/false.
 3. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
 Output: {"name_or_id": "value"}` }]
@@ -64,6 +66,7 @@ Output: {"name_or_id": "value"}` }]
     await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr});
     chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
   } catch (e) {
+    chrome.tabs.sendMessage(tabId, {action: "notify", message: "Lỗi: " + e.message, type: "error"});
     chrome.runtime.sendMessage({action: "fill_error", error: e.message}).catch(() => {});
     console.error("Autofill Error:", e);
   }
