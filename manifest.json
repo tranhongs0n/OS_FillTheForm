@@ -28,6 +28,13 @@
         "mac": "Command+Shift+F"
       },
       "description": "Trigger Auto-fill"
+    },
+    "trigger_autofill_submit": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Trigger Auto-fill and Submit"
     }
   }
 }

@@ -46,11 +46,9 @@ function showNotification(message, type = 'info') {
 }
 
 function findElement(key) {
-  // 1. Try by ID or Name
   let el = document.querySelector(`[id="${key}"], [name="${key}"]`);
   if (el) return el;
 
-  // 2. Try by Label Text
   const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
   el = allInputs.find(input => {
     const label = input.labels?.[0]?.innerText?.trim();
@@ -96,6 +94,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
       const json = JSON.parse(request.json);
       let fillCount = 0;
+      let lastFilledEl = null;
 
       for (const [key, val] of Object.entries(json)) {
         const el = findElement(key);
@@ -109,15 +108,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             el.value = val;
           }
           
-          // Extensive event dispatching for framework compatibility (OutSystems, etc.)
           el.dispatchEvent(new Event('focus', { bubbles: true }));
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
           el.dispatchEvent(new Event('blur', { bubbles: true }));
           fillCount++;
+          lastFilledEl = el;
         }
       }
+      
       showNotification(`Đã điền ${fillCount} trường dữ liệu thành công!`, "success");
+
+      if (request.submit && lastFilledEl) {
+        const form = lastFilledEl.form;
+        if (form) {
+          showNotification("Đang tự động submit form...");
+          // Try to click a submit button first (triggers validation)
+          const submitBtn = form.querySelector('[type="submit"], button:not([type="button"])');
+          if (submitBtn) {
+            submitBtn.click();
+          } else {
+            form.submit();
+          }
+        }
+      }
     } catch (e) {
       showNotification("Lỗi khi điền dữ liệu: " + e.message, "error");
     }

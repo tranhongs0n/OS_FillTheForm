@@ -1,26 +1,7 @@
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
 
-const DOMAIN_CONTEXT = `
-Vai trò: Chuyên gia BA/Tester dự án Hành chính công (QHS_GiamSat - Hệ thống Quản lý Hoạt động Giám sát của Quốc hội).
-Bối cảnh: Quản lý vòng đời giám sát (Đề xuất -> Lập chương trình -> Điều hòa -> Triển khai chuyên đề).
-
-Master Data & Thuật ngữ:
-1. Cơ quan (M_Agency): Ủy ban Thường vụ Quốc hội, Hội đồng Dân tộc, các Ủy ban (Pháp luật, Kinh tế, Văn hóa - Giáo dục, Xã hội...), Đoàn ĐBQH tỉnh/thành phố, Tổng Thư ký Quốc hội.
-2. Đối tượng: Chính phủ, các Bộ (Công an, GD&ĐT, Y tế...), UBND TP. Hà Nội/HCM.
-3. Chủ đề: PCCC, đổi mới sách giáo khoa, bạo lực học đường, bất động sản, ATGT.
-4. Loại văn bản (M_DocumentType): Tờ trình, Nghị quyết, Quyết định, Báo cáo, Công văn.
-5. Định dạng Số/Ký hiệu: [Số]/KH-UBTVQH15, [Số]/2026/NQ-UBTVQH15.
-6. Người dùng (MonitorUser_Extend): Họ tên tiếng Việt (Chủ nhiệm, Phó Chủ nhiệm, Ủy viên thường trực, Đại biểu Quốc hội, Chuyên viên).
-
-Quy tắc dữ liệu:
-- KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp.
-- Giọng văn hành chính, trang trọng. Năm 2024-2027.
-- Hạn cuối gửi kế hoạch: 15/11 năm trước đó.
-- Điền đầy đủ tất cả các trường.
-`;
-
-async function performAutofill(inputs, tabId) {
+async function performAutofill(inputs, tabId, submitAfterFill = false) {
   try {
     chrome.tabs.sendMessage(tabId, {action: "notify", message: "Đang tạo dữ liệu mẫu..."});
     
@@ -66,7 +47,7 @@ async function performAutofill(inputs, tabId) {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? jsonMatch[0] : text;
     
-    await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr});
+    await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr, submit: submitAfterFill});
     chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
   } catch (e) {
     chrome.tabs.sendMessage(tabId, {action: "notify", message: "Lỗi: " + e.message, type: "error"});
@@ -76,13 +57,14 @@ async function performAutofill(inputs, tabId) {
 }
 
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "trigger_autofill") {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    if (!tab) return;
+  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+  if (!tab) return;
 
+  if (command === "trigger_autofill" || command === "trigger_autofill_submit") {
+    const shouldSubmit = command === "trigger_autofill_submit";
     chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, async (response) => {
       if (chrome.runtime.lastError || !response || !response.forms || response.forms.length === 0) return;
-      await performAutofill(response.forms, tab.id);
+      await performAutofill(response.forms, tab.id, shouldSubmit);
     });
   }
 });
@@ -93,3 +75,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+
+const DOMAIN_CONTEXT = `
+Vai trò: Chuyên gia BA/Tester dự án Hành chính công (QHS_GiamSat - Hệ thống Quản lý Hoạt động Giám sát của Quốc hội).
+Bối cảnh: Quản lý vòng đời giám sát (Đề xuất -> Lập chương trình -> Điều hòa -> Triển khai chuyên đề).
+
+Master Data & Thuật ngữ:
+1. Cơ quan (M_Agency): Ủy ban Thường vụ Quốc hội, Hội đồng Dân tộc, các Ủy ban (Pháp luật, Kinh tế, Văn hóa - Giáo dục, Xã hội...), Đoàn ĐBQH tỉnh/thành phố, Tổng Thư ký Quốc hội.
+2. Đối tượng: Chính phủ, các Bộ (Công an, GD&ĐT, Y tế...), UBND TP. Hà Nội/HCM.
+3. Chủ đề: PCCC, đổi mới sách giáo khoa, bạo lực học đường, bất động sản, ATGT.
+4. Loại văn bản (M_DocumentType): Tờ trình, Nghị quyết, Quyết định, Báo cáo, Công văn.
+5. Định dạng Số/Ký hiệu: [Số]/KH-UBTVQH15, [Số]/2026/NQ-UBTVQH15.
+6. Người dùng (MonitorUser_Extend): Họ tên tiếng Việt (Chủ nhiệm, Phó Chủ nhiệm, Ủy viên thường trực, Đại biểu Quốc hội, Chuyên viên).
+
+Quy tắc dữ liệu:
+- KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp.
+- Giọng văn hành chính, trang trọng. Năm 2024-2027.
+- Hạn cuối gửi kế hoạch: 15/11 năm trước đó.
+- Điền đầy đủ tất cả các trường.
+`;
