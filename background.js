@@ -12,14 +12,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{
-              parts: [{ text: `You are a form auto-filler. Return JSON only. Fill these forms based on labels and input types.
+              parts: [{ text: `You are a form auto-filler. Return JSON only. Fill these forms with DIVERSE AND RANDOM sample data based on labels and input types.
 Context: ${JSON.stringify(request.inputs)}
 Rules:
-1. For <select> (dropdowns), choose exactly one 'value' from the provided 'options' list.
+1. For <select> (dropdowns), choose exactly one 'value' from the provided 'options' list. Choose DIFFERENT options if called multiple times.
 2. For checkboxes/radio buttons, use boolean true/false.
-3. For text/email/etc, generate context-aware sample data.
+3. For text/email/etc, generate creative, diverse, and random sample data.
 Output format: A flat JSON object mapping input names or IDs to values: {"input_name_or_id": "value"}` }]
-            }]
+            }],
+            generationConfig: {
+              temperature: 1.0
+            }
           })
         });
         const data = await response.json();
