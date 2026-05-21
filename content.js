@@ -46,9 +46,19 @@ function showNotification(message, type = 'info') {
 }
 
 function findElement(key) {
+  // 1. Exact ID or Name
   let el = document.querySelector(`[id="${key}"], [name="${key}"]`);
   if (el) return el;
 
+  // 2. Custom Components (Virtual Select)
+  const vsWrappers = Array.from(document.querySelectorAll('.vscomp-wrapper'));
+  el = vsWrappers.find(w => {
+    const label = w.closest('[data-container]')?.querySelector('label')?.innerText?.trim();
+    return label === key || w.id === key;
+  });
+  if (el) return el;
+
+  // 3. Standard Inputs by Label/Placeholder
   const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
   el = allInputs.find(input => {
     const label = input.labels?.[0]?.innerText?.trim();
@@ -60,19 +70,15 @@ function findElement(key) {
 
 function findSubmitButton(form) {
   if (!form) return null;
-
-  // 1. Explicit submit type
   let btn = form.querySelector('[type="submit"]');
   if (btn) return btn;
 
-  // 2. Common primary classes
   const primaryClasses = ['.btn-primary', '.os-btn-primary', '.ButtonVariant_Primary', '.primary'];
   for (const cls of primaryClasses) {
     btn = form.querySelector(cls);
     if (btn) return btn;
   }
 
-  // 3. Keywords in text
   const keywords = ['lưu', 'gửi', 'cập nhật', 'xác nhận', 'tạo mới', 'hoàn thành', 'đồng ý', 'thay đổi', 'save', 'submit', 'update', 'confirm', 'create'];
   const allButtons = Array.from(form.querySelectorAll('button, input[type="button"]'));
   
@@ -84,13 +90,13 @@ function findSubmitButton(form) {
     if (found) return found;
   }
 
-  // 4. Fallback to any button that isn't explicitly "button" type
   return form.querySelector('button:not([type="button"])');
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
     showNotification("Đang quét form...");
+    
     const mapField = el => {
       const field = {
         label: el.labels?.[0]?.innerText?.trim() || el.placeholder || el.name || el.id,
@@ -112,6 +118,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fields: Array.from(form.querySelectorAll('input, select, textarea')).map(mapField)
     }));
 
+    // Detect Virtual Selects
+    const vsFields = Array.from(document.querySelectorAll('.vscomp-wrapper')).map(el => {
+      const label = el.closest('[data-container]')?.querySelector('label')?.innerText?.trim() || "Virtual Dropdown";
+      // Try to find options by looking for the portal or associated dropbox
+      const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
+      const dropbox = dropboxId ? document.getElementById(dropboxId) : null;
+      const options = Array.from((dropbox || document).querySelectorAll('.vscomp-option')).map(opt => ({
+        text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
+        value: opt.getAttribute('data-value')
+      }));
+
+      return {
+        label,
+        id: el.id,
+        type: 'virtual-select',
+        options: options
+      };
+    });
+
+    if (vsFields.length > 0) {
+      forms.push({ name: "Custom Dropdowns", fields: vsFields });
+    }
+
     const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
     const orphans = allInputs.filter(el => !el.form).map(mapField);
 
@@ -121,50 +150,65 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     sendResponse({ forms });
   } else if (request.action === "apply_data") {
-    try {
-      const json = JSON.parse(request.json);
-      let fillCount = 0;
-      let lastFilledEl = null;
+    (async () => {
+      try {
+        const json = JSON.parse(request.json);
+        let fillCount = 0;
+        let lastFilledEl = null;
 
-      for (const [key, val] of Object.entries(json)) {
-        const el = findElement(key);
-        if (el) {
-          if (el.tagName === 'SELECT') {
-            const option = Array.from(el.options).find(opt => opt.value == val || opt.innerText == val);
-            if (option) el.value = option.value;
-          } else if (el.type === 'checkbox' || el.type === 'radio') {
-             el.checked = !!val;
-          } else {
-            el.value = val;
+        for (const [key, val] of Object.entries(json)) {
+          const el = findElement(key);
+          if (el) {
+            if (el.classList.contains('vscomp-wrapper')) {
+              // Virtual Select Handling
+              el.click(); // Open
+              await new Promise(r => setTimeout(r, 100));
+              const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
+              const dropbox = dropboxId ? document.getElementById(dropboxId) : document;
+              const option = Array.from(dropbox.querySelectorAll('.vscomp-option')).find(opt => 
+                opt.getAttribute('data-value') == val || 
+                opt.innerText.trim() == val ||
+                opt.querySelector('.vscomp-option-text')?.innerText?.trim() == val
+              );
+              if (option) option.click();
+              else el.click(); // Close if not found
+            } else if (el.tagName === 'SELECT') {
+              const option = Array.from(el.options).find(opt => opt.value == val || opt.innerText == val);
+              if (option) el.value = option.value;
+            } else if (el.type === 'checkbox' || el.type === 'radio') {
+               el.checked = !!val;
+            } else {
+              el.value = val;
+            }
+            
+            el.dispatchEvent(new Event('focus', { bubbles: true }));
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            fillCount++;
+            lastFilledEl = el;
           }
-          
-          el.dispatchEvent(new Event('focus', { bubbles: true }));
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          el.dispatchEvent(new Event('blur', { bubbles: true }));
-          fillCount++;
-          lastFilledEl = el;
         }
-      }
-      
-      showNotification(`Đã điền ${fillCount} trường dữ liệu thành công!`, "success");
+        
+        showNotification(`Đã điền ${fillCount} trường dữ liệu thành công!`, "success");
 
-      if (request.submit && lastFilledEl) {
-        const form = lastFilledEl.form;
-        if (form) {
-          const submitBtn = findSubmitButton(form);
-          if (submitBtn) {
-            showNotification(`Đang tự động submit via: ${submitBtn.innerText || submitBtn.value || 'Button'}...`);
-            submitBtn.click();
-          } else {
-            showNotification("Đang tự động submit via form.submit()...");
-            form.submit();
+        if (request.submit && lastFilledEl) {
+          const form = lastFilledEl.form || lastFilledEl.closest('form') || lastFilledEl.closest('.form-container');
+          if (form) {
+            const submitBtn = findSubmitButton(form);
+            if (submitBtn) {
+              showNotification(`Đang tự động submit via: ${submitBtn.innerText || submitBtn.value || 'Button'}...`);
+              submitBtn.click();
+            } else if (form.submit) {
+              showNotification("Đang tự động submit via form.submit()...");
+              form.submit();
+            }
           }
         }
+      } catch (e) {
+        showNotification("Lỗi khi điền dữ liệu: " + e.message, "error");
       }
-    } catch (e) {
-      showNotification("Lỗi khi điền dữ liệu: " + e.message, "error");
-    }
+    })();
   } else if (request.action === "notify") {
     showNotification(request.message, request.type);
   }
