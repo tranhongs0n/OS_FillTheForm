@@ -157,7 +157,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
     showNotification("Đang quét trang...");
     
-    (async () => {
+    try {
       const isInternalInput = el => {
         return el.type === 'file' || 
                el.type === 'checkbox' ||
