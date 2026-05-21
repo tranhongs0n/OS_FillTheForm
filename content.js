@@ -285,7 +285,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 } else {
                   const wrapper = el.closest('.osui-datepicker') || el.closest('.input-date');
                   if (wrapper) {
-                    const visibleInput = wrapper.querySelector('input:not(.flatpickr-input)');
+                    const visibleInput = wrapper.querySelector('input.form-control:not(.flatpickr-input), input.input:not(.flatpickr-input)');
                     if (visibleInput) {
                       const parts = val.split('-');
                       if (parts.length === 3) {
