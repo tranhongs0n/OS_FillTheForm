@@ -55,6 +55,11 @@ function getLabelFor(el) {
     if (prevText) return prevText; // Picks up spans, divs, or labels inside the previous container
   }
 
+  // Handle span or div wrapping the input right under the label container
+  if (el.parentElement && el.parentElement.previousElementSibling && el.parentElement.previousElementSibling.tagName === 'LABEL') {
+    return el.parentElement.previousElementSibling.innerText.trim();
+  }
+
   // Look in common wrapper parents for labels or spans that look like labels
   const wrapper = el.closest('.form-group, .display-flex, .OSBlockWidget');
   if (wrapper) {
@@ -99,17 +104,21 @@ function findElement(key) {
 
 function findSubmitButton(form) {
   if (!form) return null;
-  let btn = form.querySelector('[type="submit"]');
-  if (btn) return btn;
+  
+  // Extend search scope if inside a popup/dialog because buttons might be outside the <form>
+  const scope = form.closest('[role="dialog"], .popup-dialog, .osui-popup') || form;
+
+  let btn = scope.querySelector('[type="submit"]');
+  if (btn && btn.offsetParent !== null && !btn.classList.contains('display-none')) return btn; // Skip hidden submits
 
   const primaryClasses = ['.btn-primary', '.os-btn-primary', 'button.primary', '.ButtonVariant_Primary'];
   for (const sel of primaryClasses) {
-    btn = form.querySelector(sel);
-    if (btn) return btn;
+    btn = scope.querySelector(sel);
+    if (btn && btn.offsetParent !== null) return btn;
   }
 
   const keywords = ['lưu', 'gửi', 'cập nhật', 'xác nhận', 'tạo mới', 'hoàn thành', 'save', 'submit', 'update', 'confirm'];
-  const allBtns = Array.from(form.querySelectorAll('button, input[type="button"]'));
+  const allBtns = Array.from(scope.querySelectorAll('button, input[type="button"]')).filter(b => b.offsetParent !== null);
   return allBtns.find(b => {
     const txt = (b.innerText || b.value || '').toLowerCase();
     return keywords.some(k => txt.includes(k));
