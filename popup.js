@@ -7,6 +7,7 @@ const summary = document.getElementById('summary');
 const fieldsList = document.getElementById('fieldsList');
 const jsonPreview = document.getElementById('jsonPreview');
 const toggleJson = document.getElementById('toggleJson');
+const formSelector = document.getElementById('formSelector');
 
 scanBtn.addEventListener('click', async () => {
   status.textContent = "Scanning...";
@@ -14,6 +15,8 @@ scanBtn.addEventListener('click', async () => {
   summary.textContent = "";
   fieldsList.textContent = "";
   jsonPreview.style.display = 'none';
+  formSelector.innerHTML = '<option value="all">All Forms</option>';
+  formSelector.disabled = true;
   
   try {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -31,12 +34,17 @@ scanBtn.addEventListener('click', async () => {
         let totalFields = 0;
         let html = '';
         
-        capturedForms.forEach(form => {
+        capturedForms.forEach((form, index) => {
           totalFields += form.fields.length;
           html += `<div class="form-group">${form.name}</div>`;
           form.fields.forEach(f => {
             html += `<div class="field-item">${f.label || f.name || 'Unnamed'} (${f.type})</div>`;
           });
+          
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = form.name;
+          formSelector.appendChild(option);
         });
 
         fieldsList.innerHTML = html || 'No fields found.';
@@ -46,6 +54,7 @@ scanBtn.addEventListener('click', async () => {
         status.textContent = "Scan complete.";
         scanBtn.disabled = false;
         fillBtn.disabled = totalFields === 0;
+        formSelector.disabled = totalFields === 0;
       }
     });
   } catch (err) {
@@ -58,9 +67,17 @@ fillBtn.addEventListener('click', async () => {
   status.textContent = "Generating...";
   fillBtn.disabled = true;
   
+  const selectedValue = formSelector.value;
+  let formsToSend = [];
+  
+  if (selectedValue === 'all') {
+    formsToSend = capturedForms;
+  } else {
+    formsToSend = [capturedForms[parseInt(selectedValue)]];
+  }
+
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  // Flatten for the LLM to process easier, or send the whole structured object
-  chrome.runtime.sendMessage({action: "get_data", inputs: capturedForms, tabId: tab.id});
+  chrome.runtime.sendMessage({action: "get_data", inputs: formsToSend, tabId: tab.id});
 });
 
 toggleJson.addEventListener('click', (e) => {
