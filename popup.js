@@ -8,16 +8,34 @@ scanBtn.addEventListener('click', async () => {
   status.textContent = "Scanning...";
   scanBtn.disabled = true;
   
-  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  const response = await chrome.tabs.sendMessage(tab.id, {action: "scan_form"});
-  
-  capturedInputs = response.inputs;
-  const list = document.getElementById('fieldsList');
-  list.innerHTML = capturedInputs.map(i => `<div>${i.label || i.name} (${i.type})</div>`).join('');
-  
-  status.textContent = `Found ${capturedInputs.length} fields.`;
-  scanBtn.disabled = false;
-  fillBtn.disabled = false;
+  try {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    if (!tab) throw new Error("No active tab found");
+
+    chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, (response) => {
+      if (chrome.runtime.lastError) {
+        status.textContent = "Error: " + chrome.runtime.lastError.message;
+        scanBtn.disabled = false;
+        return;
+      }
+      
+      if (response && response.inputs) {
+        capturedInputs = response.inputs;
+        const list = document.getElementById('fieldsList');
+        list.innerHTML = capturedInputs.map(i => `<div>${i.label || i.name} (${i.type})</div>`).join('');
+        
+        status.textContent = `Found ${capturedInputs.length} fields.`;
+        scanBtn.disabled = false;
+        fillBtn.disabled = false;
+      } else {
+        status.textContent = "No fields found or invalid response.";
+        scanBtn.disabled = false;
+      }
+    });
+  } catch (err) {
+    status.textContent = "Error: " + err.message;
+    scanBtn.disabled = false;
+  }
 });
 
 fillBtn.addEventListener('click', async () => {
