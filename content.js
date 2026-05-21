@@ -239,21 +239,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       });
 
-      // 2. Revert toggles to original state before letting LLM decide
-      for (const [el, originalState] of originalStates.entries()) {
-        if (el.checked !== originalState) el.click();
-      }
-      
-      // Wait for UI to revert
-      if (toggleEls.length > 0) {
-        await new Promise(r => setTimeout(r, 400)); 
-      }
-
       sendResponse({ pageContext, forms });
-    })();
-    return true; // Keep channel open for async response
-  } else if (request.action === "apply_data") {
-    (async () => {
+      } catch (e) {
+      showNotification("Lỗi quét form: " + e.message, "error");
+      sendResponse({ error: e.message });
+      }
+      return true; // Keep channel open
+      } else if (request.action === "apply_data") {    (async () => {
       try {
         const json = JSON.parse(request.json);
         let fillCount = 0;
