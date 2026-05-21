@@ -107,92 +107,119 @@ function findSubmitButton(form) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
-    showNotification("Đang quét trang...");
+    showNotification("Đang chuẩn bị form...");
     
-    const isInternalInput = el => {
-      return el.type === 'file' || 
-             el.classList.contains('vscomp-search-input') || 
-             el.classList.contains('vscomp-hidden-input') ||
-             (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
-             el.classList.contains('flatpickr-mobile');
-    };
+    (async () => {
+      // 1. Pre-scan: Click unticked checkboxes/radios to reveal hidden sections
+      const toggleEls = Array.from(document.querySelectorAll('input[type="checkbox"]:not(:checked), input[type="radio"]:not(:checked)'));
+      const originalStates = new Map();
+      
+      for (const el of toggleEls) {
+        if (el.offsetParent !== null) { // only if visible
+           originalStates.set(el, el.checked);
+           el.click();
+        }
+      }
 
-    const mapField = el => {
-      const field = {
-        label: getLabelFor(el),
-        name: el.name,
-        id: el.id,
-        type: el.tagName === 'SELECT' ? 'select' : el.type || (el.classList.contains('vscomp-wrapper') ? 'virtual-select' : 'text')
+      // Wait for framework reactivity/animations to reveal fields
+      if (toggleEls.length > 0) {
+        await new Promise(r => setTimeout(r, 400)); 
+      }
+
+      showNotification("Đang quét trang...");
+
+      const isInternalInput = el => {
+        return el.type === 'file' || 
+               el.classList.contains('vscomp-search-input') || 
+               el.classList.contains('vscomp-hidden-input') ||
+               (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
+               el.classList.contains('flatpickr-mobile');
       };
 
-      if (el.tagName === 'SELECT') {
-        field.options = Array.from(el.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
-      } else if (el.classList.contains('vscomp-wrapper')) {
-        const hiddenSelect = el.querySelector('select');
-        if (hiddenSelect) {
-          field.options = Array.from(hiddenSelect.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
-        } else {
-          const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
-          const dropbox = dropboxId ? document.getElementById(dropboxId) : el.querySelector('.vscomp-options-container');
-          
-          if (dropbox) {
-             field.options = Array.from(dropbox.querySelectorAll('.vscomp-option')).map(opt => ({
-               text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
-               value: opt.getAttribute('data-value')
-             })).filter(o => o.value);
+      const mapField = el => {
+        const field = {
+          label: getLabelFor(el),
+          name: el.name,
+          id: el.id,
+          type: el.tagName === 'SELECT' ? 'select' : el.type || (el.classList.contains('vscomp-wrapper') ? 'virtual-select' : 'text')
+        };
+
+        if (el.tagName === 'SELECT') {
+          field.options = Array.from(el.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
+        } else if (el.classList.contains('vscomp-wrapper')) {
+          const hiddenSelect = el.querySelector('select');
+          if (hiddenSelect) {
+            field.options = Array.from(hiddenSelect.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
           } else {
-             const allOpts = Array.from(document.querySelectorAll('.vscomp-option')).map(opt => ({
-               text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
-               value: opt.getAttribute('data-value')
-             })).filter(o => o.value);
-             field.options = allOpts.length > 0 ? allOpts : [];
+            const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
+            const dropbox = dropboxId ? document.getElementById(dropboxId) : el.querySelector('.vscomp-options-container');
+            
+            if (dropbox) {
+               field.options = Array.from(dropbox.querySelectorAll('.vscomp-option')).map(opt => ({
+                 text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
+                 value: opt.getAttribute('data-value')
+               })).filter(o => o.value);
+            } else {
+               const allOpts = Array.from(document.querySelectorAll('.vscomp-option')).map(opt => ({
+                 text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
+                 value: opt.getAttribute('data-value')
+               })).filter(o => o.value);
+               field.options = allOpts.length > 0 ? allOpts : [];
+            }
           }
         }
-      }
-      return field;
-    };
+        return field;
+      };
 
-    const fields = Array.from(document.querySelectorAll('input, select, textarea, .vscomp-wrapper'))
-      .filter(el => !isInternalInput(el) && el.type !== 'hidden')
-      .map(mapField);
+      const fields = Array.from(document.querySelectorAll('input, select, textarea, .vscomp-wrapper'))
+        .filter(el => !isInternalInput(el) && el.type !== 'hidden')
+        .map(mapField);
 
-    const forms = Array.from(document.forms).map((form, i) => ({
-      name: form.name || form.id || `Form ${i+1}`,
-      fields: fields.filter(f => {
-        let el = document.getElementById(f.id);
-        if (!el && f.name) el = document.getElementsByName(f.name)[0];
-        return el && el.closest('form') === form;
-      })
-    })).filter(f => f.fields.length > 0);
+      const forms = Array.from(document.forms).map((form, i) => ({
+        name: form.name || form.id || `Form ${i+1}`,
+        fields: fields.filter(f => {
+          let el = document.getElementById(f.id);
+          if (!el && f.name) el = document.getElementsByName(f.name)[0];
+          return el && el.closest('form') === form;
+        })
+      })).filter(f => f.fields.length > 0);
 
-    // Skip detached fields completely as requested.
+      // Gather Page Context
+      const pageContext = {
+        title: document.title,
+        mainHeadings: Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 5).map(h => h.innerText.trim()).filter(t => t),
+      };
 
-    // Gather Page Context
-    const pageContext = {
-      title: document.title,
-      mainHeadings: Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 5).map(h => h.innerText.trim()).filter(t => t),
-    };
-
-    // Attach form-specific headings
-    forms.forEach(formObj => {
-      const formEl = document.querySelector(`form[name="${formObj.name}"], form[id="${formObj.name}"]`);
-      if (formEl) {
-        // Look for headings inside or right before the form
-        const internalHeadings = Array.from(formEl.querySelectorAll('h1, h2, h3, h4, h5, .title, .heading')).map(h => h.innerText.trim()).filter(t => t);
-        
-        let previousEl = formEl.previousElementSibling;
-        const externalHeadings = [];
-        for(let i=0; i<3 && previousEl; i++) {
-           if (['H1','H2','H3','H4','H5'].includes(previousEl.tagName) || previousEl.classList.contains('title')) {
-             externalHeadings.push(previousEl.innerText.trim());
-           }
-           previousEl = previousEl.previousElementSibling;
+      // Attach form-specific headings
+      forms.forEach(formObj => {
+        const formEl = document.querySelector(`form[name="${formObj.name}"], form[id="${formObj.name}"]`);
+        if (formEl) {
+          const internalHeadings = Array.from(formEl.querySelectorAll('h1, h2, h3, h4, h5, .title, .heading')).map(h => h.innerText.trim()).filter(t => t);
+          let previousEl = formEl.previousElementSibling;
+          const externalHeadings = [];
+          for(let i=0; i<3 && previousEl; i++) {
+             if (['H1','H2','H3','H4','H5'].includes(previousEl.tagName) || previousEl.classList.contains('title')) {
+               externalHeadings.push(previousEl.innerText.trim());
+             }
+             previousEl = previousEl.previousElementSibling;
+          }
+          formObj.context = [...externalHeadings, ...internalHeadings].slice(0, 3).join(" | ");
         }
-        formObj.context = [...externalHeadings, ...internalHeadings].slice(0, 3).join(" | ");
-      }
-    });
+      });
 
-    sendResponse({ pageContext, forms });
+      // 2. Revert toggles to original state before letting LLM decide
+      for (const [el, originalState] of originalStates.entries()) {
+        if (el.checked !== originalState) el.click();
+      }
+      
+      // Wait for UI to revert
+      if (toggleEls.length > 0) {
+        await new Promise(r => setTimeout(r, 400)); 
+      }
+
+      sendResponse({ pageContext, forms });
+    })();
+    return true; // Keep channel open for async response
   } else if (request.action === "apply_data") {
     (async () => {
       try {
