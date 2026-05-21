@@ -33,18 +33,31 @@ function showNotification(message, type = 'info') {
   toast.textContent = message;
   container.appendChild(toast);
 
-  // Animate in
   setTimeout(() => {
     toast.style.opacity = '1';
     toast.style.transform = 'translateX(0)';
   }, 10);
 
-  // Auto remove
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateX(20px)';
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, 4000);
+}
+
+function findElement(key) {
+  // 1. Try by ID or Name
+  let el = document.querySelector(`[id="${key}"], [name="${key}"]`);
+  if (el) return el;
+
+  // 2. Try by Label Text
+  const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
+  el = allInputs.find(input => {
+    const label = input.labels?.[0]?.innerText?.trim();
+    return label === key || input.placeholder === key || input.name === key || input.id === key;
+  });
+  
+  return el;
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -52,7 +65,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     showNotification("Đang quét form...");
     const mapField = el => {
       const field = {
-        label: el.labels?.[0]?.innerText || el.placeholder || el.name || el.id,
+        label: el.labels?.[0]?.innerText?.trim() || el.placeholder || el.name || el.id,
         name: el.name,
         id: el.id,
         type: el.type
@@ -82,22 +95,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === "apply_data") {
     try {
       const json = JSON.parse(request.json);
+      let fillCount = 0;
+
       for (const [key, val] of Object.entries(json)) {
-        const el = document.querySelector(`[name="${key}"], [id="${key}"]`);
+        const el = findElement(key);
         if (el) {
           if (el.tagName === 'SELECT') {
-            const option = Array.from(el.options).find(opt => opt.value === val || opt.innerText === val);
+            const option = Array.from(el.options).find(opt => opt.value == val || opt.innerText == val);
             if (option) el.value = option.value;
           } else if (el.type === 'checkbox' || el.type === 'radio') {
              el.checked = !!val;
           } else {
             el.value = val;
           }
+          
+          // Extensive event dispatching for framework compatibility (OutSystems, etc.)
+          el.dispatchEvent(new Event('focus', { bubbles: true }));
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true }));
+          fillCount++;
         }
       }
-      showNotification("Đã điền dữ liệu mẫu thành công!", "success");
+      showNotification(`Đã điền ${fillCount} trường dữ liệu thành công!`, "success");
     } catch (e) {
       showNotification("Lỗi khi điền dữ liệu: " + e.message, "error");
     }

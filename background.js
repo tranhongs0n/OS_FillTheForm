@@ -35,19 +35,22 @@ async function performAutofill(inputs, tabId) {
       body: JSON.stringify({
         contents: [{
           parts: [{ text: `
-${DOMAIN_CONTEXT}
+      ${DOMAIN_CONTEXT}
 
-Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
-Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
+      Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
+      Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
 
-Context form: ${JSON.stringify(inputs)}
+      Context form: ${JSON.stringify(request.inputs)}
 
-Rules:
-1. <select>: Chọn đúng 'value' from 'options'.
-2. Checkbox/Radio: boolean true/false.
-3. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
-Output: {"name_or_id": "value"}` }]
+      Rules:
+      1. <select>: Chọn đúng 'value' từ 'options'.
+      2. Checkbox/Radio: boolean true/false.
+      3. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
+      4. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
+      Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
+      Output: Một đối tượng JSON phẳng.` }]
         }],
+
         generationConfig: {
           temperature: 1.0
         }
