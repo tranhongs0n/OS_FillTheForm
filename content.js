@@ -51,15 +51,25 @@ function getLabelFor(el) {
   // Specific OutSystems pattern: sibling data-containers
   const container = el.closest('[data-container]');
   if (container && container.previousElementSibling) {
-    const lbl = container.previousElementSibling.querySelector('label');
-    if (lbl && lbl.innerText) return lbl.innerText.trim();
+    const prevText = container.previousElementSibling.innerText?.trim();
+    if (prevText) return prevText; // Picks up spans, divs, or labels inside the previous container
   }
 
-  // Look in common wrapper parents
+  // Look in common wrapper parents for labels or spans that look like labels
   const wrapper = el.closest('.form-group, .display-flex, .OSBlockWidget');
   if (wrapper) {
     const lbl = wrapper.querySelector('label');
     if (lbl && lbl.innerText) return lbl.innerText.trim();
+    
+    // OutSystems fallback: span inside a label-container
+    const spanLbl = wrapper.querySelector('[data-label] span, .control-label span');
+    if (spanLbl && spanLbl.innerText) return spanLbl.innerText.trim();
+  }
+
+  // General fallback: Look at the immediately preceding sibling text
+  if (el.previousElementSibling && el.previousElementSibling.innerText) {
+     const text = el.previousElementSibling.innerText.trim();
+     if (text && text.length < 50) return text; // Arbitrary length check to avoid grabbing huge paragraphs
   }
 
   // Fallbacks: Try to find something descriptive
