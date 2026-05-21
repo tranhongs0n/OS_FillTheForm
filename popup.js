@@ -1,6 +1,13 @@
 let capturedInputs = [];
 
-document.getElementById('scanButton').addEventListener('click', async () => {
+const scanBtn = document.getElementById('scanButton');
+const fillBtn = document.getElementById('fillButton');
+const status = document.getElementById('status');
+
+scanBtn.addEventListener('click', async () => {
+  status.textContent = "Scanning...";
+  scanBtn.disabled = true;
+  
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
   const response = await chrome.tabs.sendMessage(tab.id, {action: "scan_form"});
   
@@ -8,10 +15,22 @@ document.getElementById('scanButton').addEventListener('click', async () => {
   const list = document.getElementById('fieldsList');
   list.innerHTML = capturedInputs.map(i => `<div>${i.label || i.name} (${i.type})</div>`).join('');
   
-  document.getElementById('fillButton').disabled = false;
+  status.textContent = `Found ${capturedInputs.length} fields.`;
+  scanBtn.disabled = false;
+  fillBtn.disabled = false;
 });
 
-document.getElementById('fillButton').addEventListener('click', async () => {
+fillBtn.addEventListener('click', async () => {
+  status.textContent = "Generating...";
+  fillBtn.disabled = true;
+  
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
   chrome.runtime.sendMessage({action: "get_data", inputs: capturedInputs, tabId: tab.id});
+});
+
+chrome.runtime.onMessage.addListener((request) => {
+  if (request.action === "apply_data") {
+    status.textContent = "Filled successfully!";
+    fillBtn.disabled = false;
+  }
 });
