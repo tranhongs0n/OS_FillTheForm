@@ -58,6 +58,36 @@ function findElement(key) {
   return el;
 }
 
+function findSubmitButton(form) {
+  if (!form) return null;
+
+  // 1. Explicit submit type
+  let btn = form.querySelector('[type="submit"]');
+  if (btn) return btn;
+
+  // 2. Common primary classes
+  const primaryClasses = ['.btn-primary', '.os-btn-primary', '.ButtonVariant_Primary', '.primary'];
+  for (const cls of primaryClasses) {
+    btn = form.querySelector(cls);
+    if (btn) return btn;
+  }
+
+  // 3. Keywords in text
+  const keywords = ['lưu', 'gửi', 'cập nhật', 'xác nhận', 'tạo mới', 'hoàn thành', 'đồng ý', 'thay đổi', 'save', 'submit', 'update', 'confirm', 'create'];
+  const allButtons = Array.from(form.querySelectorAll('button, input[type="button"]'));
+  
+  for (const keyword of keywords) {
+    const found = allButtons.find(b => {
+      const text = (b.innerText || b.value || '').toLowerCase();
+      return text.includes(keyword);
+    });
+    if (found) return found;
+  }
+
+  // 4. Fallback to any button that isn't explicitly "button" type
+  return form.querySelector('button:not([type="button"])');
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
     showNotification("Đang quét form...");
@@ -122,12 +152,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.submit && lastFilledEl) {
         const form = lastFilledEl.form;
         if (form) {
-          showNotification("Đang tự động submit form...");
-          // Try to click a submit button first (triggers validation)
-          const submitBtn = form.querySelector('[type="submit"], button:not([type="button"])');
+          const submitBtn = findSubmitButton(form);
           if (submitBtn) {
+            showNotification(`Đang tự động submit via: ${submitBtn.innerText || submitBtn.value || 'Button'}...`);
             submitBtn.click();
           } else {
+            showNotification("Đang tự động submit via form.submit()...");
             form.submit();
           }
         }
