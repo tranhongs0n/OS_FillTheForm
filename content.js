@@ -60,6 +60,14 @@ function getLabelFor(el) {
     return el.parentElement.previousElementSibling.innerText.trim();
   }
 
+  // Handle case where label is a sibling of the wrapper span
+  if (el.parentElement && el.parentElement.tagName === 'SPAN') {
+      const prevSibling = el.parentElement.previousElementSibling;
+      if (prevSibling && prevSibling.tagName === 'LABEL') {
+          return prevSibling.innerText.trim();
+      }
+  }
+
   // Look in common wrapper parents for labels or spans that look like labels
   const wrapper = el.closest('.form-group, .display-flex, .OSBlockWidget');
   if (wrapper) {
