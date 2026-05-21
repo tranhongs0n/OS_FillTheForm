@@ -1,7 +1,8 @@
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "get_data") {
     const key = await chrome.storage.local.get('apiKey');
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key.apiKey}`, {
+    const apiKey = atob(key.apiKey);
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
