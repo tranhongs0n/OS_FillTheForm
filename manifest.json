@@ -2,10 +2,13 @@
   "manifest_version": 3,
   "name": "LLM Auto-Filler",
   "version": "1.0",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "sidePanel"],
   "host_permissions": ["<all_urls>"],
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "Open LLM Auto-Filler"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "options_ui": {
     "page": "options.html",

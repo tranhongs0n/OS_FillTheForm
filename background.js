@@ -1,3 +1,6 @@
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error(error));
+
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === "trigger_autofill") {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
