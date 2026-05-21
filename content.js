@@ -85,6 +85,17 @@ function getLabelFor(el) {
      if (text && text.length < 50) return text; // Arbitrary length check to avoid grabbing huge paragraphs
   }
 
+  // Modal Header fallback: Look up for a popup title
+  const popup = el.closest('.popup-dialog, [role="dialog"], .osui-popup');
+  if (popup) {
+     const title = popup.querySelector('.title-popup, [id*="-Title"], .popup-title');
+     if (title && title.innerText) {
+         // Combine popup title with placeholder/name for better context
+         const fallback = el.placeholder || el.name || el.id || "Field";
+         return `${title.innerText.trim()} - ${fallback}`;
+     }
+  }
+
   // Fallbacks: Try to find something descriptive
   return el.placeholder || el.name || el.id || "Unnamed Field";
 }
@@ -321,19 +332,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                       } else {
                         visibleInput.value = val;
                       }
-                      visibleInput.dispatchEvent(new Event('input', { bubbles: true }));
-                      visibleInput.dispatchEvent(new Event('change', { bubbles: true }));
-                      visibleInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                      visibleInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                      visibleInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                      visibleInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
                     }
                   }
                 }
               }
             }
 
-            el.dispatchEvent(new Event('focus', { bubbles: true }));
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            el.dispatchEvent(new Event('focus', { bubbles: true, cancelable: true }));
+            el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+            el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter' }));
+            el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
             fillCount++;
           }
           lastEl = el;
