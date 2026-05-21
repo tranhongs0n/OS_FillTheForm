@@ -155,27 +155,9 @@ function findSubmitButton(form) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
-    showNotification("Đang chuẩn bị form...");
+    showNotification("Đang quét trang...");
     
     (async () => {
-      // 1. Pre-scan: Click unticked checkboxes/radios to reveal hidden sections
-      const toggleEls = Array.from(document.querySelectorAll('input[type="checkbox"]:not(:checked), input[type="radio"]:not(:checked)'));
-      const originalStates = new Map();
-      
-      for (const el of toggleEls) {
-        if (el.offsetParent !== null) { // only if visible
-           originalStates.set(el, el.checked);
-           el.click();
-        }
-      }
-
-      // Wait for framework reactivity/animations to reveal fields
-      if (toggleEls.length > 0) {
-        await new Promise(r => setTimeout(r, 400)); 
-      }
-
-      showNotification("Đang quét trang...");
-
       const isInternalInput = el => {
         return el.type === 'file' || 
                el.classList.contains('vscomp-search-input') || 
