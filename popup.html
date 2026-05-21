@@ -14,6 +14,10 @@
     }
     button { cursor: pointer; padding: 5px 10px; }
     #status { font-weight: bold; font-size: 12px; margin: 5px 0; }
+    .copy-block { border: 1px solid #a5d6a7; background: #e8f5e9; margin-bottom: 5px; border-radius: 4px; overflow: hidden; }
+    .copy-header { display: flex; justify-content: space-between; background: #c8e6c9; padding: 3px 5px; font-weight: bold; font-size: 10px; align-items: center; }
+    .copy-btn { font-size: 9px; padding: 2px 5px; background: white; border: 1px solid #81c784; border-radius: 3px; cursor: pointer; }
+    .copy-val { padding: 5px; font-family: monospace; font-size: 11px; word-break: break-all; margin: 0; }
   </style>
 </head>
 <body>
@@ -44,7 +48,7 @@
   <div style="margin-top:15px; border-top: 1px solid #ccc; padding-top: 10px;">
     <h4 style="margin: 0 0 5px 0; font-size: 12px;">LLM Generated Data (Result)</h4>
     <p style="font-size: 10px; color: #666; margin: 0 0 5px 0;">Use this to manually copy/paste if auto-fill fails.</p>
-    <div id="llmOutput" style="background: #e8f5e9; padding: 5px; font-family: monospace; font-size: 10px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border: 1px solid #a5d6a7;">No data generated yet.</div>
+    <div id="llmOutput" style="max-height: 250px; overflow-y: auto;">No data generated yet.</div>
   </div>
 
   <script src="popup.js"></script>

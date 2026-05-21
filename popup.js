@@ -92,7 +92,40 @@ toggleJson.addEventListener('click', (e) => {
 
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === "llm_result") {
-    llmOutput.textContent = request.json;
+    try {
+      const data = JSON.parse(request.json);
+      llmOutput.innerHTML = '';
+      
+      for (const [key, val] of Object.entries(data)) {
+        const block = document.createElement('div');
+        block.className = 'copy-block';
+        
+        const header = document.createElement('div');
+        header.className = 'copy-header';
+        header.innerText = key;
+        
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.innerText = 'Copy';
+        btn.onclick = () => {
+          navigator.clipboard.writeText(String(val));
+          btn.innerText = 'Copied!';
+          setTimeout(() => btn.innerText = 'Copy', 1500);
+        };
+        
+        header.appendChild(btn);
+        
+        const valDiv = document.createElement('div');
+        valDiv.className = 'copy-val';
+        valDiv.innerText = String(val);
+        
+        block.appendChild(header);
+        block.appendChild(valDiv);
+        llmOutput.appendChild(block);
+      }
+    } catch (e) {
+      llmOutput.textContent = request.json;
+    }
   } else if (request.action === "fill_complete") {
     status.textContent = "Filled successfully!";
     fillBtn.disabled = false;
