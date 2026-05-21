@@ -244,7 +244,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               const opt = Array.from(el.options).find(o => o.value == val || o.innerText == val);
               if (opt) el.value = opt.value;
             } else if (el.type === 'checkbox' || el.type === 'radio') {
-              el.checked = !!val;
+              const targetState = (val === true || String(val).toLowerCase() === 'true' || val === 1 || val === '1');
+              if (el.type === 'checkbox') {
+                if (el.checked !== targetState) el.click();
+              } else if (el.type === 'radio') {
+                if (targetState && !el.checked) el.click();
+              }
             } else {
               el.value = val;
               if (el.classList.contains('flatpickr-input')) {
