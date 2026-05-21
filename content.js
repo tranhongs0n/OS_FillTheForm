@@ -62,6 +62,7 @@ function getLabelFor(el) {
     if (lbl && lbl.innerText) return lbl.innerText.trim();
   }
 
+  // Fallbacks: Try to find something descriptive
   return el.placeholder || el.name || el.id || "Unnamed Field";
 }
 
