@@ -1,3 +1,21 @@
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "trigger_autofill") {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    if (!tab) return;
+
+    // 1. Scan the page
+    chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, async (response) => {
+      if (chrome.runtime.lastError || !response || !response.forms || response.forms.length === 0) return;
+
+      // 2. Auto-select first form if multiple, or use all
+      const inputs = response.forms;
+
+      // 3. Trigger generation (similar to existing logic but encapsulated)
+      chrome.runtime.sendMessage({action: "get_data", inputs: inputs, tabId: tab.id});
+    });
+  }
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get_data") {
     (async () => {

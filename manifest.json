@@ -17,5 +17,14 @@
   "content_scripts": [{
     "matches": ["<all_urls>"],
     "js": ["content.js"]
-  }]
+  }],
+  "commands": {
+    "trigger_autofill": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Trigger Auto-fill"
+    }
+  }
 }
