@@ -29,8 +29,11 @@ fillBtn.addEventListener('click', async () => {
 });
 
 chrome.runtime.onMessage.addListener((request) => {
-  if (request.action === "apply_data") {
+  if (request.action === "fill_complete") {
     status.textContent = "Filled successfully!";
+    fillBtn.disabled = false;
+  } else if (request.action === "fill_error") {
+    status.textContent = "Error: " + request.error;
     fillBtn.disabled = false;
   }
 });
