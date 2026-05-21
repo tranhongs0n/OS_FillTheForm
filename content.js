@@ -110,7 +110,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     showNotification("Đang quét trang...");
     
     const isInternalInput = el => {
-      return el.classList.contains('vscomp-search-input') || 
+      return el.type === 'file' || 
+             el.classList.contains('vscomp-search-input') || 
              el.classList.contains('vscomp-hidden-input') ||
              (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
              el.classList.contains('flatpickr-mobile');
@@ -164,15 +165,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       })
     })).filter(f => f.fields.length > 0);
 
-    const orphans = fields.filter(f => {
-      let el = document.getElementById(f.id);
-      if (!el && f.name) el = document.getElementsByName(f.name)[0];
-      return !el || !el.closest('form');
-    });
-
-    if (orphans.length > 0) {
-      forms.push({ name: "Detached Fields", fields: orphans });
-    }
+    // Skip detached fields completely as requested.
 
     // Gather Page Context
     const pageContext = {
