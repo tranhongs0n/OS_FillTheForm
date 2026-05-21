@@ -20,7 +20,7 @@ function showNotification(message, type = 'info') {
   toast.style.cssText = `
     padding: 12px 20px;
     border-radius: 8px;
-    background: ${type === 'error' ? '#ff4d4f' : '#1890ff'};
+    background: ${type === 'error' ? '#ff4d4f' : type === 'success' ? '#52c41a' : '#1890ff'};
     color: white;
     font-family: sans-serif;
     font-size: 14px;
@@ -46,112 +46,105 @@ function showNotification(message, type = 'info') {
 }
 
 function findElement(key) {
-  // 1. Exact ID or Name
+  // 1. Try exact match by ID or Name
   let el = document.querySelector(`[id="${key}"], [name="${key}"]`);
   if (el) return el;
 
-  // 2. Custom Components (Virtual Select)
-  const vsWrappers = Array.from(document.querySelectorAll('.vscomp-wrapper'));
-  el = vsWrappers.find(w => {
-    const label = w.closest('[data-container], .form-group')?.querySelector('label')?.innerText?.trim();
-    return label === key || w.id === key;
-  });
-  if (el) return el;
+  // 2. Try by Label text
+  const labels = Array.from(document.querySelectorAll('label'));
+  const targetLabel = labels.find(l => l.innerText.trim() === key);
+  if (targetLabel && targetLabel.control) return targetLabel.control;
+  if (targetLabel && targetLabel.getAttribute('for')) {
+    el = document.getElementById(targetLabel.getAttribute('for'));
+    if (el) return el;
+  }
 
-  // 3. Standard Inputs by Label/Placeholder
-  const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
-  el = allInputs.find(input => {
-    const label = input.labels?.[0]?.innerText?.trim();
-    return label === key || input.placeholder === key || input.name === key || input.id === key;
+  // 3. Try fuzzy matching in all inputs
+  const allInputs = Array.from(document.querySelectorAll('input, select, textarea, [role="combobox"], .vscomp-wrapper'));
+  return allInputs.find(input => {
+    const label = input.labels?.[0]?.innerText?.trim() || 
+                  input.placeholder || 
+                  input.name || 
+                  input.id ||
+                  input.closest('[data-container]')?.querySelector('label')?.innerText?.trim();
+    return label === key;
   });
-  
-  return el;
 }
 
 function findSubmitButton(form) {
   if (!form) return null;
+  // Standard submit
   let btn = form.querySelector('[type="submit"]');
   if (btn) return btn;
 
-  const primaryClasses = ['.btn-primary', '.os-btn-primary', '.ButtonVariant_Primary', '.primary'];
-  for (const cls of primaryClasses) {
-    btn = form.querySelector(cls);
+  // Keywords & Primary classes
+  const keywords = ['lưu', 'gửi', 'cập nhật', 'xác nhận', 'tạo mới', 'hoàn thành', 'save', 'submit', 'update', 'confirm'];
+  const selectors = ['.btn-primary', '.os-btn-primary', 'button.primary', '.ButtonVariant_Primary'];
+  
+  for (const sel of selectors) {
+    btn = form.querySelector(sel);
     if (btn) return btn;
   }
 
-  const keywords = ['lưu', 'gửi', 'cập nhật', 'xác nhận', 'tạo mới', 'hoàn thành', 'đồng ý', 'thay đổi', 'save', 'submit', 'update', 'confirm', 'create'];
-  const allButtons = Array.from(form.querySelectorAll('button, input[type="button"]'));
-  
-  for (const keyword of keywords) {
-    const found = allButtons.find(b => {
-      const text = (b.innerText || b.value || '').toLowerCase();
-      return text.includes(keyword);
-    });
-    if (found) return found;
-  }
-
-  return form.querySelector('button:not([type="button"])');
+  const allBtns = Array.from(form.querySelectorAll('button, input[type="button"]'));
+  return allBtns.find(b => {
+    const txt = (b.innerText || b.value || '').toLowerCase();
+    return keywords.some(k => txt.includes(k));
+  });
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
-    showNotification("Đang quét form...");
+    showNotification("Đang quét trang...");
     
-    const mapField = el => ({
-      label: el.labels?.[0]?.innerText?.trim() || el.placeholder || el.name || el.id,
-      name: el.name,
-      id: el.id,
-      type: el.tagName === 'SELECT' ? 'select' : el.type
-    });
+    const fields = Array.from(document.querySelectorAll('input, select, textarea, .vscomp-wrapper')).map(el => {
+      // Basic info
+      const field = {
+        label: el.labels?.[0]?.innerText?.trim() || 
+               el.placeholder || 
+               el.name || 
+               el.id || 
+               el.closest('[data-container], .form-group')?.querySelector('label')?.innerText?.trim() ||
+               "Unnamed Field",
+        name: el.name,
+        id: el.id,
+        type: el.tagName === 'SELECT' ? 'select' : el.type || (el.classList.contains('vscomp-wrapper') ? 'virtual-select' : 'text')
+      };
 
-    const getSelectOptions = el => Array.from(el.options).map(opt => ({
-      text: opt.innerText,
-      value: opt.value
-    })).filter(opt => opt.value !== "");
+      // Dropdown options
+      if (el.tagName === 'SELECT') {
+        field.options = Array.from(el.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
+      } else if (el.classList.contains('vscomp-wrapper')) {
+        // Try to find options for Virtual Select even if closed (via hidden select if exists)
+        const hiddenSelect = el.querySelector('select');
+        if (hiddenSelect) {
+          field.options = Array.from(hiddenSelect.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
+        } else {
+           // Fallback to what we can see or common portal patterns
+           field.options = []; 
+        }
+      }
 
-    const isInternalInput = el => {
-      // Skip search inputs in dropdowns or fake inputs in datepickers
-      return el.classList.contains('vscomp-search-input') || 
-             (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
-             el.classList.contains('flatpickr-mobile');
-    };
-
-    // 1. Scan standard forms
-    const forms = Array.from(document.forms).map((form, index) => ({
-      name: form.name || form.id || `Form ${index + 1}`,
-      fields: Array.from(form.querySelectorAll('input, select, textarea'))
-        .filter(el => !isInternalInput(el))
-        .map(el => {
-          const field = mapField(el);
-          if (el.tagName === 'SELECT') field.options = getSelectOptions(el);
-          return field;
-        })
-    }));
-
-    // 2. Scan Virtual Selects
-    const vsFields = Array.from(document.querySelectorAll('.vscomp-wrapper')).map(el => {
-      const label = el.closest('[data-container], .form-group')?.querySelector('label')?.innerText?.trim() || "Virtual Dropdown";
-      const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
-      const dropbox = dropboxId ? document.getElementById(dropboxId) : null;
-      const options = Array.from((dropbox || document).querySelectorAll('.vscomp-option')).map(opt => ({
-        text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
-        value: opt.getAttribute('data-value')
-      }));
-
-      return { label, id: el.id, type: 'virtual-select', options: options };
-    });
-
-    if (vsFields.length > 0) {
-      forms.push({ name: "Custom Dropdowns", fields: vsFields });
-    }
-
-    // 3. Scan orphans
-    const allInputs = Array.from(document.querySelectorAll('input, select, textarea'))
-      .filter(el => !el.form && !isInternalInput(el));
-    const orphans = allInputs.map(el => {
-      const field = mapField(el);
-      if (el.tagName === 'SELECT') field.options = getSelectOptions(el);
       return field;
+    }).filter(f => {
+      // Filter out internal components that aren't real fields
+      const id = f.id || "";
+      const cls = f.name || "";
+      return !id.includes('vscomp-search') && !cls.includes('vscomp-search');
+    });
+
+    // Grouping logic (simplified)
+    const forms = Array.from(document.forms).map((form, i) => ({
+      name: form.name || form.id || `Form ${i+1}`,
+      fields: fields.filter(f => {
+        const el = document.getElementById(f.id);
+        return el && el.closest('form') === form;
+      })
+    })).filter(f => f.fields.length > 0);
+
+    const orphans = fields.filter(f => {
+      const el = document.getElementById(f.id) || document.getElementsByName(f.name)[0];
+      return !el || !el.closest('form');
     });
 
     if (orphans.length > 0) {
@@ -164,7 +157,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       try {
         const json = JSON.parse(request.json);
         let fillCount = 0;
-        let lastFilledEl = null;
+        let lastEl = null;
 
         for (const [key, val] of Object.entries(json)) {
           const el = findElement(key);
@@ -173,59 +166,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (el.classList.contains('vscomp-wrapper')) {
             el.click();
             await new Promise(r => setTimeout(r, 200));
-            const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
-            const dropbox = dropboxId ? document.getElementById(dropboxId) : document;
-            const option = Array.from(dropbox.querySelectorAll('.vscomp-option')).find(opt => 
-              opt.getAttribute('data-value') == val || 
-              opt.innerText.trim() == val ||
-              opt.querySelector('.vscomp-option-text')?.innerText?.trim() == val
-            );
-            if (option) {
-              option.click();
-              fillCount++;
-            } else {
-              el.click();
-            }
+            const options = Array.from(document.querySelectorAll('.vscomp-option'));
+            const match = options.find(o => o.innerText.trim() === val || o.getAttribute('data-value') === val);
+            if (match) match.click();
+            else el.click(); // Close
+            fillCount++;
           } else {
             if (el.tagName === 'SELECT') {
-              const option = Array.from(el.options).find(opt => opt.value == val || opt.innerText == val);
-              if (option) el.value = option.value;
+              const opt = Array.from(el.options).find(o => o.value == val || o.innerText == val);
+              if (opt) el.value = opt.value;
             } else if (el.type === 'checkbox' || el.type === 'radio') {
-               el.checked = !!val;
+              el.checked = !!val;
             } else {
               el.value = val;
-              // Special handling for Flatpickr if it's a datepicker mirror
               if (el.classList.contains('flatpickr-input') && el._flatpickr) {
                 el._flatpickr.setDate(val, true);
               }
             }
-            
             el.dispatchEvent(new Event('focus', { bubbles: true }));
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
             el.dispatchEvent(new Event('blur', { bubbles: true }));
             fillCount++;
           }
-          lastFilledEl = el;
+          lastEl = el;
         }
-        
-        showNotification(`Đã điền ${fillCount} trường dữ liệu thành công!`, "success");
 
-        if (request.submit && lastFilledEl) {
-          const form = lastFilledEl.form || lastFilledEl.closest('form') || lastFilledEl.closest('.form-container');
-          if (form) {
-            const submitBtn = findSubmitButton(form);
-            if (submitBtn) {
-              showNotification(`Đang tự động submit via: ${submitBtn.innerText || submitBtn.value || 'Button'}...`);
-              submitBtn.click();
-            } else if (form.submit) {
-              showNotification("Đang tự động submit via form.submit()...");
-              form.submit();
-            }
-          }
+        showNotification(`Đã điền ${fillCount} trường thành công!`, "success");
+
+        if (request.submit && lastEl) {
+          const form = lastEl.form || lastEl.closest('form') || lastEl.closest('.form-container');
+          const btn = findSubmitButton(form);
+          if (btn) btn.click();
+          else if (form && form.submit) form.submit();
         }
       } catch (e) {
-        showNotification("Lỗi khi điền dữ liệu: " + e.message, "error");
+        showNotification("Lỗi: " + e.message, "error");
       }
     })();
   } else if (request.action === "notify") {
