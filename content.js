@@ -160,6 +160,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       const isInternalInput = el => {
         return el.type === 'file' || 
+               el.type === 'checkbox' ||
+               el.type === 'radio' ||
                el.classList.contains('vscomp-search-input') || 
                el.classList.contains('vscomp-hidden-input') ||
                (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
