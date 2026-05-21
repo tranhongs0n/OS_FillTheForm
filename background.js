@@ -3,6 +3,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       try {
         const key = await chrome.storage.local.get('apiKey');
+        if (!key.apiKey) {
+          throw new Error("API Key missing. Please set it in Extension Options.");
+        }
         const apiKey = atob(key.apiKey);
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
           method: 'POST',
