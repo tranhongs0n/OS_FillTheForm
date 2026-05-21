@@ -1,6 +1,25 @@
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
 
+const DOMAIN_CONTEXT = `
+Vai trò: Chuyên gia BA/Tester dự án Hành chính công (QHS_GiamSat - Hệ thống Quản lý Hoạt động Giám sát của Quốc hội).
+Bối cảnh: Quản lý vòng đời giám sát (Đề xuất -> Lập chương trình -> Điều hòa -> Triển khai chuyên đề).
+
+Master Data & Thuật ngữ:
+1. Cơ quan (M_Agency): Ủy ban Thường vụ Quốc hội, Hội đồng Dân tộc, các Ủy ban (Pháp luật, Kinh tế, Văn hóa - Giáo dục, Xã hội...), Đoàn ĐBQH tỉnh/thành phố, Tổng Thư ký Quốc hội.
+2. Đối tượng: Chính phủ, các Bộ (Công an, GD&ĐT, Y tế...), UBND TP. Hà Nội/HCM.
+3. Chủ đề: PCCC, đổi mới sách giáo khoa, bạo lực học đường, bất động sản, ATGT.
+4. Loại văn bản (M_DocumentType): Tờ trình, Nghị quyết, Quyết định, Báo cáo, Công văn.
+5. Định dạng Số/Ký hiệu: [Số]/KH-UBTVQH15, [Số]/2026/NQ-UBTVQH15.
+6. Người dùng (MonitorUser_Extend): Họ tên tiếng Việt (Chủ nhiệm, Phó Chủ nhiệm, Ủy viên thường trực, Đại biểu Quốc hội, Chuyên viên).
+
+Quy tắc dữ liệu:
+- KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp.
+- Giọng văn hành chính, trang trọng. Năm 2024-2027.
+- Hạn cuối gửi kế hoạch: 15/11 năm trước đó.
+- Điền đầy đủ tất cả các trường.
+`;
+
 async function performAutofill(inputs, tabId) {
   try {
     const key = await chrome.storage.local.get('apiKey');
@@ -13,13 +32,19 @@ async function performAutofill(inputs, tabId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
-          parts: [{ text: `You are a form auto-filler. Return JSON only. Fill these forms with DIVERSE AND RANDOM sample data based on labels and input types.
-Context: ${JSON.stringify(inputs)}
+          parts: [{ text: `
+${DOMAIN_CONTEXT}
+
+Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
+Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
+
+Context form: ${JSON.stringify(inputs)}
+
 Rules:
-1. For <select> (dropdowns), choose exactly one 'value' from the provided 'options' list. Choose DIFFERENT options if called multiple times.
-2. For checkboxes/radio buttons, use boolean true/false.
-3. For text/email/etc, generate creative, diverse, and random sample data.
-Output format: A flat JSON object mapping input names or IDs to values: {"input_name_or_id": "value"}` }]
+1. <select>: Chọn đúng 'value' từ 'options'.
+2. Checkbox/Radio: boolean true/false.
+3. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
+Output: {"name_or_id": "value"}` }]
         }],
         generationConfig: {
           temperature: 1.0
@@ -37,7 +62,7 @@ Output format: A flat JSON object mapping input names or IDs to values: {"input_
     const jsonStr = jsonMatch ? jsonMatch[0] : text;
     
     await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr});
-    chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {}); // Ignore if sidepanel closed
+    chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
   } catch (e) {
     chrome.runtime.sendMessage({action: "fill_error", error: e.message}).catch(() => {});
     console.error("Autofill Error:", e);
