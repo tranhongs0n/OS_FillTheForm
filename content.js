@@ -200,10 +200,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               el.checked = !!val;
             } else {
               el.value = val;
-              if (el.classList.contains('flatpickr-input') && el._flatpickr) {
-                el._flatpickr.setDate(val, true);
+              if (el.classList.contains('flatpickr-input')) {
+                if (el._flatpickr) {
+                  el._flatpickr.setDate(val, true);
+                } else {
+                  // Fallback for OutSystems: update the visible fake input sibling
+                  const wrapper = el.closest('.osui-datepicker') || el.closest('.input-date');
+                  if (wrapper) {
+                    const visibleInput = wrapper.querySelector('input:not(.flatpickr-input)');
+                    if (visibleInput) {
+                      // Attempt to format to common display format (DD/MM/YYYY) or just pass val
+                      const parts = val.split('-');
+                      if (parts.length === 3) {
+                        visibleInput.value = `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+                      } else {
+                        visibleInput.value = val;
+                      }
+                      visibleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                      visibleInput.dispatchEvent(new Event('change', { bubbles: true }));
+                      visibleInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                    }
+                  }
+                }
               }
             }
+
             el.dispatchEvent(new Event('focus', { bubbles: true }));
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
