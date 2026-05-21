@@ -46,9 +46,11 @@ function showNotification(message, type = 'info') {
 }
 
 function findElement(key) {
+  // 1. Exact ID or Name
   let el = document.querySelector(`[id="${key}"], [name="${key}"]`);
   if (el) return el;
 
+  // 2. Custom Components (Virtual Select)
   const vsWrappers = Array.from(document.querySelectorAll('.vscomp-wrapper'));
   el = vsWrappers.find(w => {
     const label = w.closest('[data-container], .form-group')?.querySelector('label')?.innerText?.trim();
@@ -56,6 +58,7 @@ function findElement(key) {
   });
   if (el) return el;
 
+  // 3. Standard Inputs by Label/Placeholder
   const allInputs = Array.from(document.querySelectorAll('input, select, textarea'));
   el = allInputs.find(input => {
     const label = input.labels?.[0]?.innerText?.trim();
@@ -106,11 +109,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       value: opt.value
     })).filter(opt => opt.value !== "");
 
+    const isInternalInput = el => {
+      // Skip search inputs in dropdowns or fake inputs in datepickers
+      return el.classList.contains('vscomp-search-input') || 
+             (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
+             el.classList.contains('flatpickr-mobile');
+    };
+
     // 1. Scan standard forms
     const forms = Array.from(document.forms).map((form, index) => ({
       name: form.name || form.id || `Form ${index + 1}`,
       fields: Array.from(form.querySelectorAll('input, select, textarea'))
-        .filter(el => !el.classList.contains('vscomp-search-input')) // Skip internal inputs
+        .filter(el => !isInternalInput(el))
         .map(el => {
           const field = mapField(el);
           if (el.tagName === 'SELECT') field.options = getSelectOptions(el);
@@ -128,12 +138,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         value: opt.getAttribute('data-value')
       }));
 
-      return {
-        label,
-        id: el.id,
-        type: 'virtual-select',
-        options: options
-      };
+      return { label, id: el.id, type: 'virtual-select', options: options };
     });
 
     if (vsFields.length > 0) {
@@ -142,7 +147,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 3. Scan orphans
     const allInputs = Array.from(document.querySelectorAll('input, select, textarea'))
-      .filter(el => !el.form && !el.classList.contains('vscomp-search-input'));
+      .filter(el => !el.form && !isInternalInput(el));
     const orphans = allInputs.map(el => {
       const field = mapField(el);
       if (el.tagName === 'SELECT') field.options = getSelectOptions(el);
@@ -166,9 +171,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (!el) continue;
 
           if (el.classList.contains('vscomp-wrapper')) {
-            // Virtual Select Handling
-            el.click(); // Open
-            await new Promise(r => setTimeout(r, 200)); // Wait for animation
+            el.click();
+            await new Promise(r => setTimeout(r, 200));
             const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
             const dropbox = dropboxId ? document.getElementById(dropboxId) : document;
             const option = Array.from(dropbox.querySelectorAll('.vscomp-option')).find(opt => 
@@ -180,7 +184,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               option.click();
               fillCount++;
             } else {
-              el.click(); // Close if not found
+              el.click();
             }
           } else {
             if (el.tagName === 'SELECT') {
@@ -190,6 +194,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                el.checked = !!val;
             } else {
               el.value = val;
+              // Special handling for Flatpickr if it's a datepicker mirror
+              if (el.classList.contains('flatpickr-input') && el._flatpickr) {
+                el._flatpickr.setDate(val, true);
+              }
             }
             
             el.dispatchEvent(new Event('focus', { bubbles: true }));

@@ -26,8 +26,9 @@ async function performAutofill(inputs, tabId, submitAfterFill = false) {
       Rules:
       1. <select>: Chọn đúng 'value' từ 'options'.
       2. Checkbox/Radio: boolean true/false.
-      3. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
-      4. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
+      3. date inputs: dùng định dạng 'YYYY-MM-DD'.
+      4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
+      5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
       Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
       Output: Một đối tượng JSON phẳng.` }]
         }],
