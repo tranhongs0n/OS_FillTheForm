@@ -185,13 +185,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (!el) continue;
 
           if (el.classList.contains('vscomp-wrapper')) {
-            el.click();
-            await new Promise(r => setTimeout(r, 200));
-            const options = Array.from(document.querySelectorAll('.vscomp-option'));
-            const match = options.find(o => o.innerText.trim() === val || o.getAttribute('data-value') === val);
-            if (match) match.click();
-            else el.click(); // Close
-            fillCount++;
+            el.click(); // Open dropdown
+            
+            // Wait for options to render (polling up to 2 seconds)
+            let match = null;
+            let retries = 20; // 20 * 100ms = 2s max wait
+            
+            while (retries > 0 && !match) {
+              await new Promise(r => setTimeout(r, 100));
+              const options = Array.from(document.querySelectorAll('.vscomp-option'));
+              match = options.find(o => o.innerText.trim() === val || o.getAttribute('data-value') === val);
+              retries--;
+            }
+
+            if (match) {
+              match.click();
+              fillCount++;
+            } else {
+              el.click(); // Close if not found after wait
+            }
           } else {
             if (el.tagName === 'SELECT') {
               const opt = Array.from(el.options).find(o => o.value == val || o.innerText == val);
