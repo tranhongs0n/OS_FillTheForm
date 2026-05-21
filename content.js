@@ -97,8 +97,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
     showNotification("Đang quét trang...");
     
-    const fields = Array.from(document.querySelectorAll('input, select, textarea, .vscomp-wrapper')).map(el => {
-      // Basic info
+    const isInternalInput = el => {
+      return el.classList.contains('vscomp-search-input') || 
+             (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
+             el.classList.contains('flatpickr-mobile');
+    };
+
+    const mapField = el => {
       const field = {
         label: el.labels?.[0]?.innerText?.trim() || 
                el.placeholder || 
@@ -111,39 +116,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         type: el.tagName === 'SELECT' ? 'select' : el.type || (el.classList.contains('vscomp-wrapper') ? 'virtual-select' : 'text')
       };
 
-      // Dropdown options
       if (el.tagName === 'SELECT') {
         field.options = Array.from(el.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
       } else if (el.classList.contains('vscomp-wrapper')) {
-        // Try to find options for Virtual Select even if closed (via hidden select if exists)
+        // Try to find options for Virtual Select
         const hiddenSelect = el.querySelector('select');
         if (hiddenSelect) {
           field.options = Array.from(hiddenSelect.options).map(o => ({ text: o.innerText, value: o.value })).filter(o => o.value);
         } else {
-           // Fallback to what we can see or common portal patterns
-           field.options = []; 
+          // Look for portal or child options
+          const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
+          const dropbox = dropboxId ? document.getElementById(dropboxId) : el.querySelector('.vscomp-options-container');
+          
+          if (dropbox) {
+             field.options = Array.from(dropbox.querySelectorAll('.vscomp-option')).map(opt => ({
+               text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
+               value: opt.getAttribute('data-value')
+             })).filter(o => o.value);
+          } else {
+             // Ultimate fallback: scan whole document for this specific structure if it's the only one
+             const allOpts = Array.from(document.querySelectorAll('.vscomp-option')).map(opt => ({
+               text: opt.querySelector('.vscomp-option-text')?.innerText?.trim() || opt.innerText?.trim(),
+               value: opt.getAttribute('data-value')
+             })).filter(o => o.value);
+             field.options = allOpts.length > 0 ? allOpts : [];
+          }
         }
       }
-
       return field;
-    }).filter(f => {
-      // Filter out internal components that aren't real fields
-      const id = f.id || "";
-      const cls = f.name || "";
-      return !id.includes('vscomp-search') && !cls.includes('vscomp-search');
-    });
+    };
 
-    // Grouping logic (simplified)
+    const fields = Array.from(document.querySelectorAll('input, select, textarea, .vscomp-wrapper'))
+      .filter(el => !isInternalInput(el))
+      .map(mapField);
+
+    // Grouping logic
     const forms = Array.from(document.forms).map((form, i) => ({
       name: form.name || form.id || `Form ${i+1}`,
       fields: fields.filter(f => {
-        const el = document.getElementById(f.id);
+        // Find actual element to check its parent form
+        let el = document.getElementById(f.id);
+        if (!el && f.name) el = document.getElementsByName(f.name)[0];
         return el && el.closest('form') === form;
       })
     })).filter(f => f.fields.length > 0);
 
     const orphans = fields.filter(f => {
-      const el = document.getElementById(f.id) || document.getElementsByName(f.name)[0];
+      let el = document.getElementById(f.id);
+      if (!el && f.name) el = document.getElementsByName(f.name)[0];
+      // vscomp-wrapper might not be in a form, or inputs might be outside
       return !el || !el.closest('form');
     });
 
