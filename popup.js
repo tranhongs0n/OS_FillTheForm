@@ -8,6 +8,7 @@ const fieldsList = document.getElementById('fieldsList');
 const jsonPreview = document.getElementById('jsonPreview');
 const toggleJson = document.getElementById('toggleJson');
 const formSelector = document.getElementById('formSelector');
+const llmOutput = document.getElementById('llmOutput');
 
 scanBtn.addEventListener('click', async () => {
   status.textContent = "Scanning...";
@@ -15,6 +16,7 @@ scanBtn.addEventListener('click', async () => {
   summary.textContent = "";
   fieldsList.textContent = "";
   jsonPreview.style.display = 'none';
+  llmOutput.textContent = "No data generated yet.";
   formSelector.innerHTML = '<option value="all">All Forms</option>';
   formSelector.disabled = true;
   
@@ -89,7 +91,9 @@ toggleJson.addEventListener('click', (e) => {
 });
 
 chrome.runtime.onMessage.addListener((request) => {
-  if (request.action === "fill_complete") {
+  if (request.action === "llm_result") {
+    llmOutput.textContent = request.json;
+  } else if (request.action === "fill_complete") {
     status.textContent = "Filled successfully!";
     fillBtn.disabled = false;
   } else if (request.action === "fill_error") {

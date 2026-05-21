@@ -49,6 +49,9 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? jsonMatch[0] : text;
     
+    // Send to popup for display
+    chrome.runtime.sendMessage({action: "llm_result", json: jsonStr}).catch(() => {});
+
     await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr, submit: submitAfterFill});
     chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
   } catch (e) {

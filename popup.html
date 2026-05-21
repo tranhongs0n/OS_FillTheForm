@@ -37,8 +37,14 @@
   <button id="fillButton" disabled>Generate & Fill</button>
   
   <div style="margin-top:10px;">
-    <a href="#" id="toggleJson" style="font-size: 11px;">Show JSON Context</a>
+    <a href="#" id="toggleJson" style="font-size: 11px;">Show Extracted Form Context (Send to LLM)</a>
     <div id="jsonPreview"></div>
+  </div>
+
+  <div style="margin-top:15px; border-top: 1px solid #ccc; padding-top: 10px;">
+    <h4 style="margin: 0 0 5px 0; font-size: 12px;">LLM Generated Data (Result)</h4>
+    <p style="font-size: 10px; color: #666; margin: 0 0 5px 0;">Use this to manually copy/paste if auto-fill fails.</p>
+    <div id="llmOutput" style="background: #e8f5e9; padding: 5px; font-family: monospace; font-size: 10px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border: 1px solid #a5d6a7;">No data generated yet.</div>
   </div>
 
   <script src="popup.js"></script>
