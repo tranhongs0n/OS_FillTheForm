@@ -1,12 +1,19 @@
-let capturedInputs = [];
+let capturedForms = [];
 
 const scanBtn = document.getElementById('scanButton');
 const fillBtn = document.getElementById('fillButton');
 const status = document.getElementById('status');
+const summary = document.getElementById('summary');
+const fieldsList = document.getElementById('fieldsList');
+const jsonPreview = document.getElementById('jsonPreview');
+const toggleJson = document.getElementById('toggleJson');
 
 scanBtn.addEventListener('click', async () => {
   status.textContent = "Scanning...";
   scanBtn.disabled = true;
+  summary.textContent = "";
+  fieldsList.textContent = "";
+  jsonPreview.style.display = 'none';
   
   try {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
@@ -19,17 +26,26 @@ scanBtn.addEventListener('click', async () => {
         return;
       }
       
-      if (response && response.inputs) {
-        capturedInputs = response.inputs;
-        const list = document.getElementById('fieldsList');
-        list.innerHTML = capturedInputs.map(i => `<div>${i.label || i.name} (${i.type})</div>`).join('');
+      if (response && response.forms) {
+        capturedForms = response.forms;
+        let totalFields = 0;
+        let html = '';
         
-        status.textContent = `Found ${capturedInputs.length} fields.`;
+        capturedForms.forEach(form => {
+          totalFields += form.fields.length;
+          html += `<div class="form-group">${form.name}</div>`;
+          form.fields.forEach(f => {
+            html += `<div class="field-item">${f.label || f.name || 'Unnamed'} (${f.type})</div>`;
+          });
+        });
+
+        fieldsList.innerHTML = html || 'No fields found.';
+        summary.textContent = `Found ${capturedForms.length} form(s) with ${totalFields} total fields.`;
+        jsonPreview.textContent = JSON.stringify(capturedForms, null, 2);
+        
+        status.textContent = "Scan complete.";
         scanBtn.disabled = false;
-        fillBtn.disabled = false;
-      } else {
-        status.textContent = "No fields found or invalid response.";
-        scanBtn.disabled = false;
+        fillBtn.disabled = totalFields === 0;
       }
     });
   } catch (err) {
@@ -43,7 +59,15 @@ fillBtn.addEventListener('click', async () => {
   fillBtn.disabled = true;
   
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  chrome.runtime.sendMessage({action: "get_data", inputs: capturedInputs, tabId: tab.id});
+  // Flatten for the LLM to process easier, or send the whole structured object
+  chrome.runtime.sendMessage({action: "get_data", inputs: capturedForms, tabId: tab.id});
+});
+
+toggleJson.addEventListener('click', (e) => {
+  e.preventDefault();
+  const isHidden = jsonPreview.style.display === 'none' || !jsonPreview.style.display;
+  jsonPreview.style.display = isHidden ? 'block' : 'none';
+  toggleJson.textContent = isHidden ? 'Hide JSON Context' : 'Show JSON Context';
 });
 
 chrome.runtime.onMessage.addListener((request) => {

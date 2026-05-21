@@ -1,12 +1,38 @@
 <!DOCTYPE html>
 <html>
-<head><style>body { width: 300px; padding: 10px; font-family: sans-serif; } .loading { color: blue; }</style></head>
+<head>
+  <style>
+    body { width: 350px; padding: 10px; font-family: sans-serif; font-size: 13px; }
+    h3 { margin-top: 0; }
+    #fieldsList { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; margin-bottom: 10px; }
+    .form-group { font-weight: bold; color: #444; border-bottom: 1px solid #eee; margin-top: 5px; }
+    .field-item { padding-left: 10px; font-size: 11px; color: #666; }
+    #jsonPreview { 
+      background: #f4f4f4; padding: 5px; font-family: monospace; font-size: 10px; 
+      white-space: pre-wrap; word-break: break-all; max-height: 100px; overflow-y: auto; 
+      display: none; border: 1px dashed #999; margin-top: 10px;
+    }
+    button { cursor: pointer; padding: 5px 10px; }
+    #status { font-weight: bold; font-size: 12px; margin: 5px 0; }
+  </style>
+</head>
 <body>
-  <h3>Found Fields</h3>
-  <div id="fieldsList"></div>
-  <p id="status"></p>
+  <h3>LLM Auto-Filler</h3>
+  
   <button id="scanButton">Scan Page</button>
+  
+  <div id="summary" style="margin-top:10px;"></div>
+  <div id="fieldsList">No fields scanned yet.</div>
+  
+  <p id="status"></p>
+  
   <button id="fillButton" disabled>Generate & Fill</button>
+  
+  <div style="margin-top:10px;">
+    <a href="#" id="toggleJson" style="font-size: 11px;">Show JSON Context</a>
+    <div id="jsonPreview"></div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

@@ -12,7 +12,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{
-              parts: [{ text: `Return JSON only. Fill this form based on labels and input types: ${JSON.stringify(request.inputs)}. Output format: {"input_name": "sample_value"}` }]
+              parts: [{ text: `You are a form auto-filler. Return JSON only. Fill these forms based on labels and input types.
+Context: ${JSON.stringify(request.inputs)}
+Output format: A flat JSON object mapping input names or IDs to sample values: {"input_name_or_id": "sample_value"}` }]
             }]
           })
         });
