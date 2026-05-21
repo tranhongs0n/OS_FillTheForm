@@ -40,7 +40,7 @@ async function performAutofill(inputs, tabId) {
       Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
       Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
 
-      Context form: ${JSON.stringify(request.inputs)}
+      Context form: ${JSON.stringify(inputs)}
 
       Rules:
       1. <select>: Chọn đúng 'value' từ 'options'.
