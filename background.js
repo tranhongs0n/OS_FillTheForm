@@ -1,7 +1,7 @@
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
 
-async function performAutofill(inputs, tabId, submitAfterFill = false) {
+async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null) {
   try {
     chrome.tabs.sendMessage(tabId, {action: "notify", message: "Đang tạo dữ liệu mẫu..."});
     
@@ -21,13 +21,14 @@ async function performAutofill(inputs, tabId, submitAfterFill = false) {
       Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
       Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
 
-      Context form: ${JSON.stringify(inputs)}
+      ${pageContext ? `Page Context (Tiêu đề/Heading trang): ${JSON.stringify(pageContext)}` : ''}
+      Context form (Bao gồm headings xung quanh form): ${JSON.stringify(inputs)}
 
       Rules:
       1. <select>: Chọn đúng 'value' từ 'options'.
       2. Checkbox/Radio: boolean true/false.
       3. date inputs: dùng định dạng 'YYYY-MM-DD'.
-      4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên.
+      4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
       5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
       Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
       Output: Một đối tượng JSON phẳng.` }]
@@ -65,14 +66,14 @@ chrome.commands.onCommand.addListener(async (command) => {
     const shouldSubmit = command === "trigger_autofill_submit";
     chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, async (response) => {
       if (chrome.runtime.lastError || !response || !response.forms || response.forms.length === 0) return;
-      await performAutofill(response.forms, tab.id, shouldSubmit);
+      await performAutofill(response.forms, tab.id, shouldSubmit, response.pageContext);
     });
   }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get_data") {
-    performAutofill(request.inputs, request.tabId);
+    performAutofill(request.inputs, request.tabId, false, request.pageContext);
     return true;
   }
 });

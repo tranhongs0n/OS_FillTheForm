@@ -174,7 +174,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       forms.push({ name: "Detached Fields", fields: orphans });
     }
 
-    sendResponse({ forms });
+    // Gather Page Context
+    const pageContext = {
+      title: document.title,
+      mainHeadings: Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 5).map(h => h.innerText.trim()).filter(t => t),
+    };
+
+    // Attach form-specific headings
+    forms.forEach(formObj => {
+      const formEl = document.querySelector(`form[name="${formObj.name}"], form[id="${formObj.name}"]`);
+      if (formEl) {
+        // Look for headings inside or right before the form
+        const internalHeadings = Array.from(formEl.querySelectorAll('h1, h2, h3, h4, h5, .title, .heading')).map(h => h.innerText.trim()).filter(t => t);
+        
+        let previousEl = formEl.previousElementSibling;
+        const externalHeadings = [];
+        for(let i=0; i<3 && previousEl; i++) {
+           if (['H1','H2','H3','H4','H5'].includes(previousEl.tagName) || previousEl.classList.contains('title')) {
+             externalHeadings.push(previousEl.innerText.trim());
+           }
+           previousEl = previousEl.previousElementSibling;
+        }
+        formObj.context = [...externalHeadings, ...internalHeadings].slice(0, 3).join(" | ");
+      }
+    });
+
+    sendResponse({ pageContext, forms });
   } else if (request.action === "apply_data") {
     (async () => {
       try {
