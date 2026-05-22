@@ -1,7 +1,14 @@
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
 
-async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null) {
+async function getPromptForUrl(url) {
+  const result = await chrome.storage.local.get(['promptOverrides']);
+  const overrides = result.promptOverrides || [];
+  const match = overrides.find(o => new RegExp(o.pattern.replace(/\*/g, '.*')).test(url));
+  return match ? match.instruction : DOMAIN_CONTEXT;
+}
+
+async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null, url = "") {
   try {
     chrome.tabs.sendMessage(tabId, {action: "notify", message: "Đang tạo dữ liệu mẫu..."});
     
@@ -11,6 +18,7 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
     }
     const apiKey = atob(key.apiKey);
     const contextSnapshot = key.contextSnapshot || {};
+    const domainContext = await getPromptForUrl(url);
     
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -18,7 +26,7 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
       body: JSON.stringify({
         contents: [{
           parts: [{ text: `
-      ${DOMAIN_CONTEXT}
+      ${domainContext}
       
       Context Snapshot: ${JSON.stringify(contextSnapshot)}
 
@@ -73,14 +81,14 @@ chrome.commands.onCommand.addListener(async (command) => {
     const shouldSubmit = command === "trigger_autofill_submit";
     chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, async (response) => {
       if (chrome.runtime.lastError || !response || !response.forms || response.forms.length === 0) return;
-      await performAutofill(response.forms, tab.id, shouldSubmit, response.pageContext);
+      await performAutofill(response.forms, tab.id, shouldSubmit, response.pageContext, tab.url);
     });
   }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get_data") {
-    performAutofill(request.inputs, request.tabId, false, request.pageContext);
+    performAutofill(request.inputs, request.tabId, false, request.pageContext, request.url || sender.tab.url);
     return true;
   }
 });
