@@ -154,6 +154,20 @@ function findSubmitButton(form) {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "captureContext") {
+    const fields = Array.from(document.querySelectorAll('input, textarea')).map(el => {
+        const label = document.querySelector(`label[for="${el.id}"]`)?.innerText || el.placeholder || "";
+        return { label, type: el.type, id: el.id, name: el.name };
+    });
+    sendResponse({
+      url: window.location.href,
+      title: document.title,
+      fields
+    });
+  }
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scan_form") {
     showNotification("Đang quét trang...");
     
