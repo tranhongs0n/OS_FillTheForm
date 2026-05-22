@@ -1,3 +1,11 @@
+document.getElementById('capture-btn').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+  const response = await chrome.tabs.sendMessage(tab.id, {action: "captureContext"});
+  chrome.storage.local.set({contextSnapshot: response}, () => {
+      document.getElementById('status').innerText = "Context Captured!";
+  });
+});
+
 let capturedForms = [];
 
 const scanBtn = document.getElementById('scanButton');
