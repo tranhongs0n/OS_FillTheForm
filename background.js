@@ -5,11 +5,13 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
   try {
     chrome.tabs.sendMessage(tabId, {action: "notify", message: "Đang tạo dữ liệu mẫu..."});
     
-    const key = await chrome.storage.local.get('apiKey');
+    const key = await chrome.storage.local.get(['apiKey', 'contextSnapshot']);
     if (!key.apiKey) {
       throw new Error("API Key missing. Please set it in Extension Options.");
     }
     const apiKey = atob(key.apiKey);
+    const contextSnapshot = key.contextSnapshot || {};
+    
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -17,6 +19,8 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
         contents: [{
           parts: [{ text: `
       ${DOMAIN_CONTEXT}
+      
+      Context Snapshot: ${JSON.stringify(contextSnapshot)}
 
       Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
       Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
