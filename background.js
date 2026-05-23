@@ -15,14 +15,14 @@ const MODELS = [
   'gemini-2.5-flash'
 ];
 
-async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null, url = "") {
+async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null, url = "", batchCount = 1) {
   let lastError = null;
 
   for (const model of MODELS) {
     try {
       chrome.tabs.sendMessage(tabId, {
         action: "notify", 
-        message: MODELS.indexOf(model) === 0 ? "Đang tạo dữ liệu mẫu..." : `Lỗi model trước. Thử lại với ${model}...`
+        message: MODELS.indexOf(model) === 0 ? (batchCount > 1 ? `Đang tạo ${batchCount} bản ghi...` : "Đang tạo dữ liệu mẫu...") : `Lỗi model trước. Thử lại với ${model}...`
       });
       
       const key = await chrome.storage.local.get(['apiKey', 'contextSnapshot']);
@@ -33,6 +33,10 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
       const contextSnapshot = key.contextSnapshot || {};
       const domainContext = await getPromptForUrl(url);
       
+      const taskDescription = batchCount > 1 
+        ? `Nhiệm vụ: Trả về một MẢNG JSON gồm ĐÚNG ${batchCount} đối tượng.`
+        : `Nhiệm vụ: Trả về một ĐỐI TƯỢNG JSON duy nhất.`;
+
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -43,7 +47,7 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
 
         Context Snapshot: ${JSON.stringify(contextSnapshot)}
 
-        Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
+        ${taskDescription} Điền form dựa trên label và input type.
         Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
 
         ${pageContext ? `Page Context (Tiêu đề/Heading trang): ${JSON.stringify(pageContext)}` : ''}
@@ -56,11 +60,13 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
         4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
         5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
         Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
-        Output: Một đối tượng JSON phẳng.` }]
+        Output: ${batchCount > 1 ? 'Một mảng JSON các đối tượng phẳng.' : 'Một đối tượng JSON phẳng.'}` }]
           }],
 
           generationConfig: {
-            temperature: 1.0
+            temperature: 0.9,
+            presencePenalty: 0.7,
+            frequencyPenalty: 0.7
           }
         })
       });
@@ -87,9 +93,24 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
       }
       
       const text = data.candidates[0].content.parts[0].text;
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonMatch = batchCount > 1 ? text.match(/\[[\s\S]*\]/) : text.match(/\{[\s\S]*\}/);
       const jsonStr = jsonMatch ? jsonMatch[0] : text;
       
+      if (batchCount > 1) {
+        try {
+          const batchArray = JSON.parse(jsonStr);
+          if (Array.isArray(batchArray)) {
+            const batchData = batchArray.map(item => ({ data: JSON.stringify(item), used: false, timestamp: Date.now() }));
+            await chrome.storage.local.set({ batchData });
+            chrome.tabs.sendMessage(tabId, { action: "notify", message: `Đã tạo xong ${batchArray.length} bản ghi. Sử dụng Ctrl+Shift+B để điền.`, type: "success" });
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to parse batch JSON", e);
+          throw new Error("Generated content is not a valid JSON array");
+        }
+      }
+
       // Send to popup for display
       chrome.runtime.sendMessage({action: "llm_result", json: jsonStr}).catch(() => {});
 
@@ -132,7 +153,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get_data") {
-    performAutofill(request.inputs, request.tabId, false, request.pageContext, request.url || sender.tab.url);
+    performAutofill(request.inputs, request.tabId, false, request.pageContext, request.url || sender.tab.url, request.batchCount || 1);
     return true;
   }
 });
