@@ -1,16 +1,183 @@
 <!DOCTYPE html>
-<html>
-<body>
-  <h3>Settings</h3>
-  <input type="password" id="apiKey" placeholder="Enter API Key">
-  <button id="saveButton">Save API Key</button>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enterprise LLM Auto-Filler Suite - Settings</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body class="options-body">
+  <header class="header-container">
+    <div class="header-title-area">
+      <h1>Enterprise LLM Auto-Filler Suite</h1>
+      <div class="header-subtitle">Advanced OutSystems Data Synthesizer & Forms Automation Center</div>
+    </div>
+    <span class="badge-premium">✨ Gemini v3.1 Enabled</span>
+  </header>
 
-  <h3>Prompt Overrides</h3>
-  <table id="overrideTable">
-    <tr><th>Pattern</th><th>Instruction</th><th>Action</th></tr>
-  </table>
-  <button id="addOverride">Add Row</button>
-  <button id="saveOverrides">Save Overrides</button>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="settingsTab">⚙️ General Settings</button>
+    <button class="tab-btn" data-tab="templatesTab">📄 Prompt Overrides</button>
+    <button class="tab-btn" data-tab="selectorsTab">🔍 Custom Selectors</button>
+    <button class="tab-btn" data-tab="telemetryTab">📊 Telemetry Metrics</button>
+  </nav>
+
+  <main>
+    <!-- TAB 1: GENERAL SETTINGS -->
+    <section id="settingsTab" class="tab-content active">
+      <div class="settings-grid">
+        <div class="card">
+          <h2 class="card-title">LLM Credentials & Connection Settings</h2>
+          <div class="description-text">Configure the primary API routing and security credentials. All API keys are securely obfuscated in local extension storage.</div>
+          
+          <div class="form-group">
+            <label class="form-label" for="apiKey">Google Gemini API Key</label>
+            <div class="input-with-button">
+              <div class="password-wrapper">
+                <input type="password" id="apiKey" placeholder="Enter AIzaSy... API Key">
+                <button type="button" class="toggle-password-btn" id="toggleApiKey">👁️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 15px;">
+            <label class="form-label" for="modelSelect">Default Orchestrator Model</label>
+            <select id="modelSelect">
+              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview (Recommended - Fast & Cost-Efficient)</option>
+              <option value="gemini-3-flash-preview">gemini-3-flash-preview (Standard Core)</option>
+              <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Stable Light)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash (Standard Large)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top: 15px;">
+            <label class="form-label" for="timeoutMs">Network Connection Timeout (ms)</label>
+            <input type="number" id="timeoutMs" min="1000" max="60000" value="6000">
+          </div>
+
+          <div class="action-row">
+            <button id="saveButton" class="btn-primary">Save Settings</button>
+          </div>
+        </div>
+
+        <div class="card" style="height: fit-content;">
+          <h2 class="card-title">Secured Obfuscation</h2>
+          <div class="description-text" style="font-size: 11px; line-height: 1.5;">
+            This extension operates offline on your browser instance. Your API credentials are encrypted via Base-64 token hashing and only shared directly with official Google API servers (`generativelanguage.googleapis.com`). No telemetry or keys are transmitted to third parties.
+          </div>
+          <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; font-size: 11px; margin-bottom: 4px;">Active Connection</div>
+            <div id="connStatus" class="badge badge-warning">Awaiting API Key</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PROMPT OVERRIDES / TEMPLATES CRUD -->
+    <section id="templatesTab" class="tab-content">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div>
+            <h2 class="card-title" style="margin-bottom: 0;">Context overrides & Templates Manager</h2>
+            <div class="description-text" style="margin-bottom: 0; margin-top: 4px;">Apply custom prompt behaviors and roles based on URL pattern matching.</div>
+          </div>
+          <div class="import-export-btns">
+            <button id="exportTemplatesBtn" class="btn btn-xs">📤 Export JSON</button>
+            <button id="importTemplatesBtn" class="btn btn-xs">📥 Import JSON</button>
+            <input type="file" id="importFileInput" style="display: none;" accept=".json">
+          </div>
+        </div>
+
+        <div class="table-container" style="margin-bottom: 15px;">
+          <table id="overrideTable">
+            <thead>
+              <tr>
+                <th style="width: 30%;">URL Match Pattern</th>
+                <th style="width: 55%;">Specific System Guidelines & Instructions</th>
+                <th style="width: 15%; text-align: center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="overrideTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button id="addOverride" class="btn-success btn-xs">+ Add New Rule</button>
+          <button id="saveOverrides" class="btn-primary">Save Overrides</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: CUSTOM SELECTORS CRUD -->
+    <section id="selectorsTab" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Dynamic Custom Element Selector Adapters</h2>
+        <div class="description-text">Define selectors for unique components like OutSystems Virtual Select (vscomp) or customized calendars. Form scanner listens to these rules to discover inputs correctly.</div>
+
+        <div class="table-container" style="margin-bottom: 15px;">
+          <table id="selectorsTable">
+            <thead>
+              <tr>
+                <th style="width: 30%;">Component Type</th>
+                <th style="width: 55%;">CSS Selector Match String</th>
+                <th style="width: 15%; text-align: center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="selectorsTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button id="addSelector" class="btn-success btn-xs">+ Add Selector</button>
+          <button id="saveSelectors" class="btn-primary">Save Selector Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: TELEMETRY METRICS -->
+    <section id="telemetryTab" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Developer Productivity & AI Success Insights</h2>
+        <div class="description-text">Real-time statistics demonstrating manual form entry avoidance, model reliability metrics, and local ROI calculation.</div>
+
+        <div class="chart-container">
+          <div class="stat-box">
+            <div class="stat-label">Total Autofills</div>
+            <div class="stat-num" id="statTotalFills">0</div>
+            <div style="font-size: 10px; color: var(--text-muted);">Completions completed</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Completions Success</div>
+            <div class="stat-num" id="statSuccessRate">0%</div>
+            <div style="font-size: 10px; color: var(--text-muted);">Error recovery index</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Productive Time Saved</div>
+            <div class="stat-num" id="statHoursSaved">0h</div>
+            <div style="font-size: 10px; color: var(--text-muted);">Estimated manual relief</div>
+          </div>
+        </div>
+
+        <h3 style="margin-top: 25px; margin-bottom: 10px; font-family: var(--font-display); font-size: 14px;">Weekly Velocity Trends (Last 7 Days)</h3>
+        <div class="css-bar-chart" id="velocityChart">
+          <!-- Populated dynamically via JS -->
+        </div>
+        <div class="chart-label-container" id="velocityLabels">
+          <!-- Populated dynamically via JS -->
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+          <button id="resetTelemetryBtn" class="btn-danger btn-xs">Reset Telemetry Metrics</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast">Settings Saved Successfully!</div>
 
   <script src="options.js"></script>
 </body>

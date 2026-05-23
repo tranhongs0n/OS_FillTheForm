@@ -1,77 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <style>
-    body { width: 350px; padding: 10px; font-family: sans-serif; font-size: 13px; }
-    h3 { margin-top: 0; }
-    #fieldsList { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; margin-bottom: 10px; }
-    .form-group { font-weight: bold; color: #444; border-bottom: 1px solid #eee; margin-top: 5px; }
-    .field-item { padding-left: 10px; font-size: 11px; color: #666; }
-    #jsonPreview { 
-      background: #f4f4f4; padding: 5px; font-family: monospace; font-size: 10px; 
-      white-space: pre-wrap; word-break: break-all; max-height: 100px; overflow-y: auto; 
-      display: none; border: 1px dashed #999; margin-top: 10px;
-    }
-    button { cursor: pointer; padding: 5px 10px; }
-    #status { font-weight: bold; font-size: 12px; margin: 5px 0; }
-    .copy-block { border: 1px solid #a5d6a7; background: #e8f5e9; margin-bottom: 5px; border-radius: 4px; overflow: hidden; }
-    .copy-header { display: flex; justify-content: space-between; background: #c8e6c9; padding: 3px 5px; font-weight: bold; font-size: 10px; align-items: center; }
-    .copy-btn { font-size: 9px; padding: 2px 5px; background: white; border: 1px solid #81c784; border-radius: 3px; cursor: pointer; }
-    .copy-val { padding: 5px; font-family: monospace; font-size: 11px; word-break: break-all; margin: 0; }
-    .section-title { font-weight: bold; margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 14px; }
-    .batch-controls { display: flex; gap: 5px; margin: 10px 0; align-items: center; }
-    .batch-btn { padding: 3px 8px; font-size: 11px; }
-    .danger-btn { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; font-size: 11px; padding: 3px 8px; margin-left: auto; }
-    #batchContainer { max-height: 250px; overflow-y: auto; border: 1px solid #eee; margin-top: 5px; }
-    .batch-item { display: flex; justify-content: space-between; align-items: center; padding: 5px; border-bottom: 1px solid #f5f5f5; font-size: 11px; }
-    .batch-item.used { opacity: 0.5; text-decoration: line-through; background: #fafafa; }
-    .batch-item-text { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 5px; }
-    .apply-btn { font-size: 10px; padding: 2px 5px; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto-Filler Sidebar Control Center</title>
+  <link rel="stylesheet" href="theme.css">
 </head>
-<body>
-  <h3>LLM Auto-Filler</h3>
-  
-  <button id="scanButton">Scan Page</button>
-  <button id="capture-btn">Capture Context</button>
-  <div id="status"></div>
-  
-  <div id="summary" style="margin-top:10px;"></div>
-  
-  <div style="margin: 10px 0;">
-    <label for="formSelector">Target Form:</label>
-    <select id="formSelector" style="width: 100%;" disabled>
-      <option value="all">All Forms</option>
-    </select>
-  </div>
+<body class="popup-body">
+  <header class="panel-header">
+    <div class="panel-title">⚡ Auto-Filler Suite</div>
+    <div id="status" class="badge badge-violet">Ready</div>
+  </header>
 
-  <div id="fieldsList">No fields scanned yet.</div>
-  
-  <p id="scanStatus"></p>
-  
-  <button id="fillButton" disabled>Generate & Fill</button>
-  
-  <div style="margin-top:10px;">
-    <a href="#" id="toggleJson" style="font-size: 11px;">Show Extracted Form Context (Send to LLM)</a>
-    <div id="jsonPreview"></div>
-  </div>
+  <main class="dashboard-grid">
+    <!-- CARD 1: FORM SCANNER -->
+    <div class="card">
+      <h2 class="card-title">Form Scanners & Target</h2>
+      <div class="btn-row">
+        <button id="scanButton" class="btn-primary">🔍 Scan Page Fields</button>
+        <button id="capture-btn" class="btn">📸 Snapshot Context</button>
+      </div>
 
-  <div class="section-title">Batch Generation</div>
-  <div class="batch-controls">
-    <span style="font-size: 11px; color: #666;">Create:</span>
-    <button class="batch-btn" data-count="5">5</button>
-    <button class="batch-btn" data-count="10">10</button>
-    <button class="batch-btn" data-count="20">20</button>
-    <button id="clearBatchBtn" class="danger-btn">Clear Batch</button>
-  </div>
-  <div id="batchContainer">
-    <div id="batchList"></div>
-  </div>
+      <div style="margin: 8px 0 4px 0;">
+        <label class="form-label" for="formSelector">Target Form Selection</label>
+        <select id="formSelector" disabled>
+          <option value="all">All Forms Scanned</option>
+        </select>
+      </div>
+      
+      <div id="summary" style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">No form scanned yet.</div>
 
-  <div style="margin-top:15px; border-top: 1px solid #ccc; padding-top: 10px;">
-    <h4 style="margin: 0 0 5px 0; font-size: 12px;">LLM Generated Data (Result)</h4>
-    <p style="font-size: 10px; color: #666; margin: 0 0 5px 0;">Use this to manually copy/paste if auto-fill fails.</p>
-    <div id="llmOutput" style="max-height: 250px; overflow-y: auto;">No data generated yet.</div>
+      <div class="fields-list-box" id="fieldsList">
+        <div style="color: var(--text-muted); text-align: center; padding: 10px;">Trigger "Scan Page Fields" to capture form trees.</div>
+      </div>
+      
+      <p id="scanStatus" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;"></p>
+    </div>
+
+    <!-- CARD 2: OPERATIONS -->
+    <div class="card">
+      <h2 class="card-title">Instant Standard Fill</h2>
+      <button id="fillButton" class="btn-primary" style="width: 100%;" disabled>⚡ Generate & Auto-Fill Form</button>
+      
+      <div style="margin-top: 8px;">
+        <a href="#" id="toggleJson" style="font-size: 11px; display: inline-block;">Show Scraped Form Context (JSON)</a>
+        <div id="jsonPreview" style="display: none; background: var(--bg-secondary); border: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 9px; padding: 6px; border-radius: 4px; max-height: 80px; overflow-y: auto; white-space: pre-wrap; margin-top: 6px;"></div>
+      </div>
+    </div>
+
+    <!-- CARD 3: BATCH MANAGEMENT -->
+    <div class="card">
+      <h2 class="card-title">Batch Generation Suite</h2>
+      
+      <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 11px; color: var(--text-secondary);">Batch Size:</span>
+        <button class="batch-btn btn-xs" data-count="5">5</button>
+        <button class="batch-btn btn-xs" data-count="10">10</button>
+        <button class="batch-btn btn-xs" data-count="20">20</button>
+      </div>
+
+      <div class="batch-utility-row">
+        <button id="exportCsvBtn" class="btn btn-xs">📊 CSV Export</button>
+        <button id="importJsonBtn" class="btn btn-xs">📥 JSON Import</button>
+        <input type="file" id="importBatchFileInput" style="display: none;" accept=".json">
+      </div>
+
+      <div class="batch-action-grid" id="batchContainer">
+        <div id="batchList" style="color: var(--text-muted); text-align: center; padding: 10px; font-size: 11px;">No active batch records.</div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+        <button id="clearBatchBtn" class="btn-danger btn-xs">Clear Batch</button>
+      </div>
+    </div>
+
+    <!-- CARD 4: LLM RESULT BLOCKS -->
+    <div class="card">
+      <h2 class="card-title">LLM Data Sandbox</h2>
+      <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">Copy individual generated blocks below if auto-fill misses.</div>
+      <div id="llmOutput" style="max-height: 180px; overflow-y: auto; color: var(--text-muted); font-size: 11px;">No data generated yet.</div>
+    </div>
+  </main>
+
+  <footer class="config-link-area">
+    <a href="#" id="openOptionsLink">⚙️ Manage Suite Settings</a>
+    <span style="color: var(--text-muted); font-size: 10px;">v1.0.0</span>
+  </footer>
+
+  <!-- INTERACTIVE INLINE RECORD EDITOR OVERLAY -->
+  <div class="overlay" id="editorOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ Edit Batch Record</h3>
+        <button type="button" class="close-btn" id="closeEditorBtn">&times;</button>
+      </div>
+      
+      <div class="modal-body" id="editorFieldsContainer">
+        <!-- Dynamically populated key-value input fields -->
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn" id="cancelEditorBtn">Cancel</button>
+        <button type="button" class="btn-primary" id="saveEditorBtn">Save Changes</button>
+      </div>
+    </div>
   </div>
 
   <script src="popup.js"></script>
