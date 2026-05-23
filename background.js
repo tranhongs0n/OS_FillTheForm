@@ -81,9 +81,7 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
           }],
 
           generationConfig: {
-            temperature: 0.9,
-            presencePenalty: 0.7,
-            frequencyPenalty: 0.7
+            temperature: 0.9
           }
         })
       });
