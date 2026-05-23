@@ -35,6 +35,13 @@
         "mac": "Command+Shift+S"
       },
       "description": "Trigger Auto-fill and Submit"
+    },
+    "trigger_batch_fill": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Shift+B"
+      },
+      "description": "Fill Next Unused Batch Record"
     }
   }
 }

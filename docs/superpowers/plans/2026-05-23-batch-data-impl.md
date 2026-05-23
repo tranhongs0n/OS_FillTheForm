@@ -1,0 +1,220 @@
+# Batch Data Generation Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Implement batch data generation using Gemini API and sequential filling via keyboard shortcut.
+
+**Architecture:** Refactor `performAutofill` to support `batchCount`. If `batchCount > 1`, generate a JSON array and store it in `chrome.storage.local`. Add a listener for `trigger_batch_fill` command to apply the next unused record.
+
+**Tech Stack:** JavaScript, Chrome Extension APIs, Gemini API.
+
+---
+
+### Task 1: Update System Prompt and Diversity Constraints
+
+**Files:**
+- Modify: `D:\Projects\autoCreateSampleDataOutSystems\background.js`
+
+- [ ] **Step 1: Update `DOMAIN_CONTEXT` with diversity constraints**
+
+```javascript
+const DOMAIN_CONTEXT = `
+Vai trò: Chuyên gia BA/Tester dự án Hành chính công (QHS_GiamSat - Hệ thống Quản lý Hoạt động Giám sát của Quốc hội).
+Bối cảnh: Quản lý vòng đời giám sát (Đề xuất -> Lập chương trình -> Điều hòa -> Triển khai chuyên đề).
+
+Master Data & Thuật ngữ:
+1. Cơ quan (M_Agency): Ủy ban Thường vụ Quốc hội, Hội đồng Dân tộc, các Ủy ban (Pháp luật, Kinh tế, Văn hóa - Giáo dục, Xã hội...), Đoàn ĐBQH tỉnh/thành phố, Tổng Thư ký Quốc hội.
+2. Đối tượng: Chính phủ, các Bộ (Công an, GD&ĐT, Y tế...), UBND TP. Hà Nội/HCM.
+3. Chủ đề: PCCC, đổi mới sách giáo khoa, bạo lực học đường, bất động sản, ATGT.
+4. Loại văn bản (M_DocumentType): Tờ trình, Nghị quyết, Quyết định, Báo cáo, Công văn.
+5. Định dạng Số/Ký hiệu: [Số]/KH-UBTVQH15, [Số]/2026/NQ-UBTVQH15.
+6. Người dùng (MonitorUser_Extend): Họ tên tiếng Việt (Chủ nhiệm, Phó Chủ nhiệm, Ủy viên thường trực, Đại biểu Quốc hội, Chuyên viên).
+
+Ràng buộc Đa dạng (BẮT BUỘC):
+- Sử dụng đa dạng họ tên tiếng Việt (không trùng lặp trong cùng một đợt tạo).
+- Chức vụ phải phong phú: từ cấp lãnh đạo (Chủ nhiệm, Phó Chủ nhiệm) đến chuyên viên.
+- Các chuyên đề, nhiệm vụ, nội dung văn bản phải cụ thể, thực tế và không được lặp lại máy móc.
+- Phân bổ dữ liệu ngẫu nhiên nhưng phải hợp lý về mặt nghiệp vụ hành chính.
+
+Quy tắc dữ liệu:
+- KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp.
+- Giọng văn hành chính, trang trọng. Năm 2024-2027.
+- Hạn cuối gửi kế hoạch: 15/11 năm trước đó.
+- Điền đầy đủ tất cả các trường.
+`;
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add background.js
+git commit -m "chore: update system prompt with diversity constraints"
+```
+
+### Task 2: Refactor `performAutofill` for Batch Support
+
+**Files:**
+- Modify: `D:\Projects\autoCreateSampleDataOutSystems\background.js`
+
+- [ ] **Step 1: Update `performAutofill` signature and logic**
+Add `batchCount` parameter. Update prompt and generation config.
+
+```javascript
+async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null, url = "", batchCount = 1) {
+  let lastError = null;
+
+  for (const model of MODELS) {
+    try {
+      chrome.tabs.sendMessage(tabId, {
+        action: "notify", 
+        message: MODELS.indexOf(model) === 0 ? (batchCount > 1 ? `Đang tạo ${batchCount} bản ghi...` : "Đang tạo dữ liệu mẫu...") : `Lỗi model trước. Thử lại với ${model}...`
+      });
+      
+      const key = await chrome.storage.local.get(['apiKey', 'contextSnapshot']);
+      if (!key.apiKey) {
+        throw new Error("API Key missing. Please set it in Extension Options.");
+      }
+      const apiKey = atob(key.apiKey);
+      const contextSnapshot = key.contextSnapshot || {};
+      const domainContext = await getPromptForUrl(url);
+      
+      const taskDescription = batchCount > 1 
+        ? `Nhiệm vụ: Trả về một MẢNG JSON gồm ĐÚNG ${batchCount} đối tượng.`
+        : `Nhiệm vụ: Trả về một ĐỐI TƯỢNG JSON duy nhất.`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: `
+        ${domainContext}
+
+        Context Snapshot: ${JSON.stringify(contextSnapshot)}
+
+        ${taskDescription} Điền form dựa trên label và input type.
+        Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
+
+        ${pageContext ? `Page Context (Tiêu đề/Heading trang): ${JSON.stringify(pageContext)}` : ''}
+        Context form (Bao gồm headings xung quanh form): ${JSON.stringify(inputs)}
+
+        Rules:
+        1. <select>: Chọn đúng 'value' từ 'options'.
+        2. Checkbox/Radio: boolean true/false.
+        3. date inputs: dùng định dạng 'YYYY-MM-DD'.
+        4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
+        5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
+        Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
+        Output: ${batchCount > 1 ? 'Một mảng JSON các đối tượng phẳng.' : 'Một đối tượng JSON phẳng.'}` }]
+          }],
+
+          generationConfig: {
+            temperature: 0.9,
+            presencePenalty: 0.7,
+            frequencyPenalty: 0.7
+          }
+        })
+      });
+```
+
+- [ ] **Step 2: Handle batch response parsing and storage**
+
+```javascript
+      // ... after fetch and JSON parsing
+      if (!data.candidates || !data.candidates[0].content.parts[0].text) {
+        throw new Error("Invalid response from Gemini API");
+      }
+      
+      const text = data.candidates[0].content.parts[0].text;
+      const jsonMatch = batchCount > 1 ? text.match(/\[[\s\S]*\]/) : text.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : text;
+      
+      if (batchCount > 1) {
+        try {
+          const batchArray = JSON.parse(jsonStr);
+          if (Array.isArray(batchArray)) {
+            const batchData = batchArray.map(item => ({ data: JSON.stringify(item), used: false, timestamp: Date.now() }));
+            await chrome.storage.local.set({ batchData });
+            chrome.tabs.sendMessage(tabId, { action: "notify", message: `Đã tạo xong ${batchArray.length} bản ghi. Sử dụng Ctrl+Shift+B để điền.`, type: "success" });
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to parse batch JSON", e);
+          throw new Error("Generated content is not a valid JSON array");
+        }
+      }
+
+      // Send to popup for display
+      chrome.runtime.sendMessage({action: "llm_result", json: jsonStr}).catch(() => {});
+
+      await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr, submit: submitAfterFill});
+      chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
+```
+
+- [ ] **Step 3: Update `onMessage` listener to pass `batchCount`**
+
+```javascript
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "get_data") {
+    performAutofill(request.inputs, request.tabId, false, request.pageContext, request.url || sender.tab.url, request.batchCount || 1);
+    return true;
+  }
+});
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add background.js
+git commit -m "feat: refactor performAutofill for batch generation support"
+```
+
+### Task 3: Implement `trigger_batch_fill` Listener
+
+**Files:**
+- Modify: `D:\Projects\autoCreateSampleDataOutSystems\background.js`
+
+- [ ] **Step 1: Add listener for `trigger_batch_fill` command**
+
+```javascript
+chrome.commands.onCommand.addListener(async (command) => {
+  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+  if (!tab) return;
+
+  if (command === "trigger_autofill" || command === "trigger_autofill_submit") {
+    const shouldSubmit = command === "trigger_autofill_submit";
+    chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, async (response) => {
+      if (chrome.runtime.lastError || !response || !response.forms || response.forms.length === 0) return;
+      await performAutofill(response.forms, tab.id, shouldSubmit, response.pageContext, tab.url);
+    });
+  } else if (command === "trigger_batch_fill") {
+    const { batchData } = await chrome.storage.local.get(['batchData']);
+    if (!batchData || !Array.isArray(batchData)) {
+      chrome.tabs.sendMessage(tab.id, { action: "notify", message: "Chưa có dữ liệu batch. Hãy tạo từ Popup.", type: "error" });
+      return;
+    }
+
+    const nextIndex = batchData.findIndex(item => !item.used);
+    if (nextIndex === -1) {
+      chrome.tabs.sendMessage(tab.id, { action: "notify", message: "Đã hết dữ liệu mẫu trong đợt này.", type: "error" });
+      return;
+    }
+
+    const record = batchData[nextIndex];
+    chrome.tabs.sendMessage(tab.id, { action: "apply_data", json: record.data, submit: false });
+    
+    batchData[nextIndex].used = true;
+    await chrome.storage.local.set({ batchData });
+    
+    const remaining = batchData.filter(item => !item.used).length;
+    chrome.tabs.sendMessage(tab.id, { action: "notify", message: `Đã điền xong. Còn lại ${remaining} bản ghi.`, type: "success" });
+  }
+});
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add background.js
+git commit -m "feat: add trigger_batch_fill keyboard shortcut listener"
+```

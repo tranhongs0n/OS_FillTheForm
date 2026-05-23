@@ -19,11 +19,26 @@ function loadOverrides() {
 
 function addRow(pattern = '', instruction = '') {
   const row = overrideTable.insertRow();
-  row.innerHTML = `
-    <td><input type="text" value="${pattern}" class="pattern"></td>
-    <td><input type="text" value="${instruction}" class="instruction"></td>
-    <td><button onclick="this.parentElement.parentElement.remove()">Delete</button></td>
-  `;
+  
+  const cellPattern = row.insertCell();
+  const inputPattern = document.createElement('input');
+  inputPattern.type = 'text';
+  inputPattern.value = pattern;
+  inputPattern.className = 'pattern';
+  cellPattern.appendChild(inputPattern);
+
+  const cellInstruction = row.insertCell();
+  const inputInstruction = document.createElement('input');
+  inputInstruction.type = 'text';
+  inputInstruction.value = instruction;
+  inputInstruction.className = 'instruction';
+  cellInstruction.appendChild(inputInstruction);
+
+  const cellActions = row.insertCell();
+  const deleteBtn = document.createElement('button');
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.onclick = () => row.remove();
+  cellActions.appendChild(deleteBtn);
 }
 
 addOverrideBtn.addEventListener('click', () => addRow());

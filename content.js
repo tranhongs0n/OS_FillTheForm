@@ -155,15 +155,20 @@ function findSubmitButton(form) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "captureContext") {
-    const fields = Array.from(document.querySelectorAll('input, textarea')).map(el => {
-        const label = document.querySelector(`label[for="${el.id}"]`)?.innerText || el.placeholder || "";
-        return { label, type: el.type, id: el.id, name: el.name };
-    });
-    sendResponse({
-      url: window.location.href,
-      title: document.title,
-      fields
-    });
+    try {
+      const fields = Array.from(document.querySelectorAll('input, textarea')).map(el => {
+          const label = document.querySelector(`label[for="${el.id}"]`)?.innerText || el.placeholder || "";
+          return { label, type: el.type, id: el.id, name: el.name };
+      });
+      sendResponse({
+        url: window.location.href,
+        title: document.title,
+        fields
+      });
+    } catch (e) {
+      sendResponse({ error: e.message });
+    }
+    return false; // Sync response
   }
 });
 
@@ -174,8 +179,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
       const isInternalInput = el => {
         return el.type === 'file' || 
-               el.type === 'checkbox' ||
-               el.type === 'radio' ||
                el.classList.contains('vscomp-search-input') || 
                el.classList.contains('vscomp-hidden-input') ||
                (el.classList.contains('input') && el.closest('.osui-datepicker')) ||
@@ -272,8 +275,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (el.classList.contains('vscomp-wrapper')) {
             const toggleBtn = el.querySelector('.vscomp-toggle-button') || el;
             
-            // Ensure any previous dropdowns are closed and animations finished
-            await new Promise(r => setTimeout(r, 300)); 
+            // Wait for any previous animations to settle
+            await new Promise(r => requestAnimationFrame(() => r()));
             
             toggleBtn.click(); // Open dropdown
             
@@ -286,11 +289,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               
               // Scope to specific dropbox if possible, else global
               const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
-              const dropbox = dropboxId ? document.getElementById(dropboxId) : document;
+              const dropbox = dropboxId ? document.getElementById(dropboxId) : document.querySelector('.vscomp-options-container');
               
-              if (dropbox) {
+              if (dropbox && dropbox.offsetParent !== null) { // Check if visible
                 const options = Array.from(dropbox.querySelectorAll('.vscomp-option'));
-                match = options.find(o => o.innerText.trim() === val || o.getAttribute('data-value') === val);
+                const searchVal = String(val).toLowerCase();
+                match = options.find(o => {
+                  const text = o.innerText.trim().toLowerCase();
+                  const dVal = (o.getAttribute('data-value') || '').toLowerCase();
+                  return text === searchVal || dVal === searchVal || text.includes(searchVal);
+                });
               }
               retries--;
             }
@@ -299,11 +307,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               match.click();
               fillCount++;
             } else {
-              toggleBtn.click(); // Close if not found after wait
+              // Close if opened but not found
+              const dropboxId = el.id ? `vscomp-dropbox-container-${el.id.split('-').pop()}` : null;
+              const dropbox = dropboxId ? document.getElementById(dropboxId) : document.querySelector('.vscomp-options-container');
+              if (dropbox && dropbox.offsetParent !== null) {
+                toggleBtn.click();
+              }
             }
             
-            // Wait for close animation and state update before moving to next field
-            await new Promise(r => setTimeout(r, 400));
+            // Wait for close animation
+            await new Promise(r => setTimeout(r, 200));
           } else {
             if (el.tagName === 'SELECT') {
               const opt = Array.from(el.options).find(o => o.value == val || o.innerText == val);

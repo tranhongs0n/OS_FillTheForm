@@ -1,8 +1,13 @@
 document.getElementById('capture-btn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  const response = await chrome.tabs.sendMessage(tab.id, {action: "captureContext"});
-  chrome.storage.local.set({contextSnapshot: response}, () => {
+  chrome.tabs.sendMessage(tab.id, {action: "captureContext"}, (response) => {
+    if (chrome.runtime.lastError) {
+      document.getElementById('status').innerText = "Error: " + chrome.runtime.lastError.message;
+      return;
+    }
+    chrome.storage.local.set({contextSnapshot: response}, () => {
       document.getElementById('status').innerText = "Context Captured!";
+    });
   });
 });
 
@@ -11,6 +16,7 @@ let capturedForms = [];
 const scanBtn = document.getElementById('scanButton');
 const fillBtn = document.getElementById('fillButton');
 const status = document.getElementById('status');
+const scanStatus = document.getElementById('scanStatus');
 const summary = document.getElementById('summary');
 const fieldsList = document.getElementById('fieldsList');
 const jsonPreview = document.getElementById('jsonPreview');
@@ -19,7 +25,7 @@ const formSelector = document.getElementById('formSelector');
 const llmOutput = document.getElementById('llmOutput');
 
 scanBtn.addEventListener('click', async () => {
-  status.textContent = "Scanning...";
+  scanStatus.textContent = "Scanning...";
   scanBtn.disabled = true;
   summary.textContent = "";
   fieldsList.textContent = "";
@@ -34,7 +40,7 @@ scanBtn.addEventListener('click', async () => {
 
     chrome.tabs.sendMessage(tab.id, {action: "scan_form"}, (response) => {
       if (chrome.runtime.lastError) {
-        status.textContent = "Error: " + chrome.runtime.lastError.message;
+        scanStatus.textContent = "Error: " + chrome.runtime.lastError.message;
         scanBtn.disabled = false;
         return;
       }
@@ -62,14 +68,14 @@ scanBtn.addEventListener('click', async () => {
         summary.textContent = `Found ${capturedForms.length} form(s) with ${totalFields} total fields.`;
         jsonPreview.textContent = JSON.stringify(capturedForms, null, 2);
         
-        status.textContent = "Scan complete.";
+        scanStatus.textContent = "Scan complete.";
         scanBtn.disabled = false;
         fillBtn.disabled = totalFields === 0;
         formSelector.disabled = totalFields === 0;
       }
     });
   } catch (err) {
-    status.textContent = "Error: " + err.message;
+    scanStatus.textContent = "Error: " + err.message;
     scanBtn.disabled = false;
   }
 });
@@ -89,6 +95,14 @@ fillBtn.addEventListener('click', async () => {
 
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
   chrome.runtime.sendMessage({action: "get_data", inputs: formsToSend, tabId: tab.id});
+
+  // Backup timeout to reset button if background script fails silently
+  setTimeout(() => {
+    if (fillBtn.disabled && status.textContent === "Generating...") {
+      fillBtn.disabled = false;
+      status.textContent = "Generation timed out.";
+    }
+  }, 30000);
 });
 
 document.querySelectorAll('.batch-btn').forEach(btn => {
@@ -146,15 +160,20 @@ function renderBatchData(batchData) {
     `;
 
     div.querySelector('.apply-btn').addEventListener('click', async () => {
+      const recordId = item.id;
       const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-      chrome.tabs.sendMessage(tab.id, { action: "apply_data", json: item.data, submit: false });
       
-      // Mark as used in storage
-      const result = await chrome.storage.local.get(['batchData']);
-      const updatedBatch = result.batchData;
-      if (updatedBatch && updatedBatch[index]) {
-        updatedBatch[index].used = true;
-        chrome.storage.local.set({ batchData: updatedBatch });
+      // Mark as used in storage FIRST to prevent race condition
+      const { batchData: latestBatch } = await chrome.storage.local.get('batchData');
+      if (latestBatch) {
+        const record = latestBatch.find(r => r.id === recordId);
+        if (record && !record.used) {
+          record.used = true;
+          await chrome.storage.local.set({ batchData: latestBatch });
+          
+          // Then apply the data
+          chrome.tabs.sendMessage(tab.id, { action: "apply_data", json: record.data, submit: false });
+        }
       }
     });
 

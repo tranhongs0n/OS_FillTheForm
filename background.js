@@ -1,11 +1,28 @@
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.error(error));
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((error) => console.error(error));
+});
 
 async function getPromptForUrl(url) {
   const result = await chrome.storage.local.get(['promptOverrides']);
   const overrides = result.promptOverrides || [];
   const match = overrides.find(o => new RegExp(o.pattern.replace(/\*/g, '.*')).test(url));
   return match ? match.instruction : DOMAIN_CONTEXT;
+}
+
+function extractJson(text, isArray = false) {
+  // Strip markdown code blocks
+  let cleaned = text.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1').trim();
+  
+  const startChar = isArray ? '[' : '{';
+  const endChar = isArray ? ']' : '}';
+  const firstIndex = cleaned.indexOf(startChar);
+  const lastIndex = cleaned.lastIndexOf(endChar);
+  
+  if (firstIndex !== -1 && lastIndex !== -1) {
+    return cleaned.substring(firstIndex, lastIndex + 1);
+  }
+  return cleaned;
 }
 
 const MODELS = [
@@ -93,21 +110,27 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
       }
       
       const text = data.candidates[0].content.parts[0].text;
-      const jsonMatch = batchCount > 1 ? text.match(/\[[\s\S]*\]/) : text.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? jsonMatch[0] : text;
+      const jsonStr = extractJson(text, batchCount > 1);
       
       if (batchCount > 1) {
         try {
           const batchArray = JSON.parse(jsonStr);
           if (Array.isArray(batchArray)) {
-            const batchData = batchArray.map(item => ({ data: JSON.stringify(item), used: false, timestamp: Date.now() }));
+            const batchData = batchArray.map(item => ({ 
+              id: crypto.randomUUID(),
+              data: JSON.stringify(item), 
+              used: false, 
+              timestamp: Date.now() 
+            }));
             await chrome.storage.local.set({ batchData });
             chrome.tabs.sendMessage(tabId, { action: "notify", message: `Đã tạo xong ${batchArray.length} bản ghi. Sử dụng Ctrl+Shift+B để điền.`, type: "success" });
             return;
+          } else {
+            throw new Error("LLM returned an object instead of an array for batch request.");
           }
         } catch (e) {
           console.error("Failed to parse batch JSON", e);
-          throw new Error("Generated content is not a valid JSON array");
+          throw new Error("Generated content is not a valid JSON array: " + e.message);
         }
       }
 
@@ -123,7 +146,7 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
       console.error(`Error with model ${model}:`, e);
       
       // If error is not transient (e.g. 400 Bad Request, 401 Unauthorized), don't retry with other models
-      if (e.status && ![429, 500, 503, 504].includes(e.status)) {
+      if (e.status && [400, 401, 403, 404].includes(e.status)) {
         break; 
       }
       // If no API key, no point in retrying
@@ -149,25 +172,27 @@ chrome.commands.onCommand.addListener(async (command) => {
       await performAutofill(response.forms, tab.id, shouldSubmit, response.pageContext, tab.url);
     });
   } else if (command === "trigger_batch_fill") {
-    const { batchData } = await chrome.storage.local.get(['batchData']);
-    if (!batchData || !Array.isArray(batchData)) {
+    const result = await chrome.storage.local.get('batchData');
+    const latestBatch = result.batchData || [];
+    
+    if (!latestBatch || !Array.isArray(latestBatch)) {
       chrome.tabs.sendMessage(tab.id, { action: "notify", message: "Chưa có dữ liệu batch. Hãy tạo từ Popup.", type: "error" });
       return;
     }
 
-    const nextIndex = batchData.findIndex(item => !item.used);
+    const nextIndex = latestBatch.findIndex(item => !item.used);
     if (nextIndex === -1) {
       chrome.tabs.sendMessage(tab.id, { action: "notify", message: "Đã hết dữ liệu mẫu trong đợt này.", type: "error" });
       return;
     }
 
-    const record = batchData[nextIndex];
+    const record = latestBatch[nextIndex];
+    latestBatch[nextIndex].used = true;
+    await chrome.storage.local.set({ batchData: latestBatch });
+
     chrome.tabs.sendMessage(tab.id, { action: "apply_data", json: record.data, submit: false });
     
-    batchData[nextIndex].used = true;
-    await chrome.storage.local.set({ batchData });
-    
-    const remaining = batchData.filter(item => !item.used).length;
+    const remaining = latestBatch.filter(item => !item.used).length;
     chrome.tabs.sendMessage(tab.id, { action: "notify", message: `Đã điền xong. Còn lại ${remaining} bản ghi.`, type: "success" });
   }
 });
