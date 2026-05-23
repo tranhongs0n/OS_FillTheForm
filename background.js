@@ -148,6 +148,27 @@ chrome.commands.onCommand.addListener(async (command) => {
       if (chrome.runtime.lastError || !response || !response.forms || response.forms.length === 0) return;
       await performAutofill(response.forms, tab.id, shouldSubmit, response.pageContext, tab.url);
     });
+  } else if (command === "trigger_batch_fill") {
+    const { batchData } = await chrome.storage.local.get(['batchData']);
+    if (!batchData || !Array.isArray(batchData)) {
+      chrome.tabs.sendMessage(tab.id, { action: "notify", message: "Chưa có dữ liệu batch. Hãy tạo từ Popup.", type: "error" });
+      return;
+    }
+
+    const nextIndex = batchData.findIndex(item => !item.used);
+    if (nextIndex === -1) {
+      chrome.tabs.sendMessage(tab.id, { action: "notify", message: "Đã hết dữ liệu mẫu trong đợt này.", type: "error" });
+      return;
+    }
+
+    const record = batchData[nextIndex];
+    chrome.tabs.sendMessage(tab.id, { action: "apply_data", json: record.data, submit: false });
+    
+    batchData[nextIndex].used = true;
+    await chrome.storage.local.set({ batchData });
+    
+    const remaining = batchData.filter(item => !item.used).length;
+    chrome.tabs.sendMessage(tab.id, { action: "notify", message: `Đã điền xong. Còn lại ${remaining} bản ghi.`, type: "success" });
   }
 });
 
