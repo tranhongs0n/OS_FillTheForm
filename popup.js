@@ -91,6 +91,89 @@ fillBtn.addEventListener('click', async () => {
   chrome.runtime.sendMessage({action: "get_data", inputs: formsToSend, tabId: tab.id});
 });
 
+document.querySelectorAll('.batch-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const count = parseInt(btn.dataset.count);
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    
+    // Get captured forms first
+    let formsToSend = capturedForms;
+    if (formSelector.value !== 'all') {
+      formsToSend = [capturedForms[parseInt(formSelector.value)]];
+    }
+    
+    if (formsToSend.length === 0) {
+      status.textContent = "Please scan the page first.";
+      return;
+    }
+
+    status.textContent = `Generating ${count} records...`;
+    chrome.runtime.sendMessage({
+      action: "get_data", 
+      inputs: formsToSend, 
+      tabId: tab.id, 
+      batchCount: count,
+      url: tab.url
+    });
+  });
+});
+
+document.getElementById('clearBatchBtn').addEventListener('click', () => {
+  chrome.storage.local.set({ batchData: [] }, () => {
+    renderBatchData([]);
+  });
+});
+
+function renderBatchData(batchData) {
+  const batchList = document.getElementById('batchList');
+  if (!batchData || batchData.length === 0) {
+    batchList.innerHTML = '<div style="padding: 10px; color: #999; text-align: center;">No batch data.</div>';
+    return;
+  }
+
+  batchList.innerHTML = '';
+  batchData.forEach((item, index) => {
+    const data = JSON.parse(item.data);
+    const div = document.createElement('div');
+    div.className = `batch-item ${item.used ? 'used' : ''}`;
+    
+    // Create summary from first few fields
+    const summaryText = Object.entries(data).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(', ');
+    
+    div.innerHTML = `
+      <div class="batch-item-text" title='${JSON.stringify(data, null, 2)}'>#${index + 1}: ${summaryText}</div>
+      <button class="apply-btn" ${item.used ? 'disabled' : ''}>Apply</button>
+    `;
+
+    div.querySelector('.apply-btn').addEventListener('click', async () => {
+      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+      chrome.tabs.sendMessage(tab.id, { action: "apply_data", json: item.data, submit: false });
+      
+      // Mark as used in storage
+      const result = await chrome.storage.local.get(['batchData']);
+      const updatedBatch = result.batchData;
+      if (updatedBatch && updatedBatch[index]) {
+        updatedBatch[index].used = true;
+        chrome.storage.local.set({ batchData: updatedBatch });
+      }
+    });
+
+    batchList.appendChild(div);
+  });
+}
+
+// Initialize
+chrome.storage.local.get(['batchData'], (result) => {
+  renderBatchData(result.batchData || []);
+});
+
+// Listen for changes (e.g. from background script or other popup instances)
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.batchData) {
+    renderBatchData(changes.batchData.newValue || []);
+  }
+});
+
 toggleJson.addEventListener('click', (e) => {
   e.preventDefault();
   const isHidden = jsonPreview.style.display === 'none' || !jsonPreview.style.display;
