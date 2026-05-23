@@ -8,69 +8,113 @@ async function getPromptForUrl(url) {
   return match ? match.instruction : DOMAIN_CONTEXT;
 }
 
+const MODELS = [
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash'
+];
+
 async function performAutofill(inputs, tabId, submitAfterFill = false, pageContext = null, url = "") {
-  try {
-    chrome.tabs.sendMessage(tabId, {action: "notify", message: "Đang tạo dữ liệu mẫu..."});
-    
-    const key = await chrome.storage.local.get(['apiKey', 'contextSnapshot']);
-    if (!key.apiKey) {
-      throw new Error("API Key missing. Please set it in Extension Options.");
-    }
-    const apiKey = atob(key.apiKey);
-    const contextSnapshot = key.contextSnapshot || {};
-    const domainContext = await getPromptForUrl(url);
-    
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: `
-      ${domainContext}
+  let lastError = null;
+
+  for (const model of MODELS) {
+    try {
+      chrome.tabs.sendMessage(tabId, {
+        action: "notify", 
+        message: MODELS.indexOf(model) === 0 ? "Đang tạo dữ liệu mẫu..." : `Lỗi model trước. Thử lại với ${model}...`
+      });
       
-      Context Snapshot: ${JSON.stringify(contextSnapshot)}
+      const key = await chrome.storage.local.get(['apiKey', 'contextSnapshot']);
+      if (!key.apiKey) {
+        throw new Error("API Key missing. Please set it in Extension Options.");
+      }
+      const apiKey = atob(key.apiKey);
+      const contextSnapshot = key.contextSnapshot || {};
+      const domainContext = await getPromptForUrl(url);
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: `
+        ${domainContext}
 
-      Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
-      Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
+        Context Snapshot: ${JSON.stringify(contextSnapshot)}
 
-      ${pageContext ? `Page Context (Tiêu đề/Heading trang): ${JSON.stringify(pageContext)}` : ''}
-      Context form (Bao gồm headings xung quanh form): ${JSON.stringify(inputs)}
+        Nhiệm vụ: Trả về JSON duy nhất. Điền form dựa trên label và input type.
+        Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
 
-      Rules:
-      1. <select>: Chọn đúng 'value' từ 'options'.
-      2. Checkbox/Radio: boolean true/false.
-      3. date inputs: dùng định dạng 'YYYY-MM-DD'.
-      4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
-      5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
-      Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
-      Output: Một đối tượng JSON phẳng.` }]
-        }],
+        ${pageContext ? `Page Context (Tiêu đề/Heading trang): ${JSON.stringify(pageContext)}` : ''}
+        Context form (Bao gồm headings xung quanh form): ${JSON.stringify(inputs)}
 
-        generationConfig: {
-          temperature: 1.0
+        Rules:
+        1. <select>: Chọn đúng 'value' từ 'options'.
+        2. Checkbox/Radio: boolean true/false.
+        3. date inputs: dùng định dạng 'YYYY-MM-DD'.
+        4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
+        5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
+        Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
+        Output: Một đối tượng JSON phẳng.` }]
+          }],
+
+          generationConfig: {
+            temperature: 1.0
+          }
+        })
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        if (!response.ok) {
+          throw new Error(`Gemini API Error (${response.status}): ${response.statusText || 'Non-JSON error response'}`);
         }
-      })
-    });
-    
-    const data = await response.json();
-    if (!data.candidates || !data.candidates[0].content.parts[0].text) {
-      throw new Error("Invalid response from Gemini API");
-    }
-    
-    const text = data.candidates[0].content.parts[0].text;
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : text;
-    
-    // Send to popup for display
-    chrome.runtime.sendMessage({action: "llm_result", json: jsonStr}).catch(() => {});
+        throw new Error("Failed to parse response from Gemini API");
+      }
 
-    await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr, submit: submitAfterFill});
-    chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
-  } catch (e) {
-    chrome.tabs.sendMessage(tabId, {action: "notify", message: "Lỗi: " + e.message, type: "error"});
-    chrome.runtime.sendMessage({action: "fill_error", error: e.message}).catch(() => {});
-    console.error("Autofill Error:", e);
+      if (!response.ok) {
+        const errorMsg = data.error?.message || response.statusText || `HTTP error ${response.status}`;
+        const err = new Error(`Gemini API Error (${response.status}): ${errorMsg}`);
+        err.status = response.status;
+        throw err;
+      }
+
+      if (!data.candidates || !data.candidates[0].content.parts[0].text) {
+        throw new Error("Invalid response from Gemini API");
+      }
+      
+      const text = data.candidates[0].content.parts[0].text;
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : text;
+      
+      // Send to popup for display
+      chrome.runtime.sendMessage({action: "llm_result", json: jsonStr}).catch(() => {});
+
+      await chrome.tabs.sendMessage(tabId, {action: "apply_data", json: jsonStr, submit: submitAfterFill});
+      chrome.runtime.sendMessage({action: "fill_complete"}).catch(() => {});
+      
+      return; // Success! Exit the loop and function.
+    } catch (e) {
+      lastError = e;
+      console.error(`Error with model ${model}:`, e);
+      
+      // If error is not transient (e.g. 400 Bad Request, 401 Unauthorized), don't retry with other models
+      if (e.status && ![429, 500, 503, 504].includes(e.status)) {
+        break; 
+      }
+      // If no API key, no point in retrying
+      if (e.message.includes("API Key missing")) {
+        break;
+      }
+    }
   }
+
+  // If we reach here, all models failed
+  chrome.tabs.sendMessage(tabId, {action: "notify", message: "Lỗi: " + lastError.message, type: "error"});
+  chrome.runtime.sendMessage({action: "fill_error", error: lastError.message}).catch(() => {});
 }
 
 chrome.commands.onCommand.addListener(async (command) => {
@@ -104,6 +148,12 @@ Master Data & Thuật ngữ:
 4. Loại văn bản (M_DocumentType): Tờ trình, Nghị quyết, Quyết định, Báo cáo, Công văn.
 5. Định dạng Số/Ký hiệu: [Số]/KH-UBTVQH15, [Số]/2026/NQ-UBTVQH15.
 6. Người dùng (MonitorUser_Extend): Họ tên tiếng Việt (Chủ nhiệm, Phó Chủ nhiệm, Ủy viên thường trực, Đại biểu Quốc hội, Chuyên viên).
+
+Ràng buộc Đa dạng (BẮT BUỘC):
+- Sử dụng đa dạng họ tên tiếng Việt (không trùng lặp trong cùng một đợt tạo).
+- Chức vụ phải phong phú: từ cấp lãnh đạo (Chủ nhiệm, Phó Chủ nhiệm) đến chuyên viên.
+- Các chuyên đề, nhiệm vụ, nội dung văn bản phải cụ thể, thực tế và không được lặp lại máy móc.
+- Phân bổ dữ liệu ngẫu nhiên nhưng phải hợp lý về mặt nghiệp vụ hành chính.
 
 Quy tắc dữ liệu:
 - KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp.
