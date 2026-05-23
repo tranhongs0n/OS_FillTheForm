@@ -18,6 +18,15 @@
     .copy-header { display: flex; justify-content: space-between; background: #c8e6c9; padding: 3px 5px; font-weight: bold; font-size: 10px; align-items: center; }
     .copy-btn { font-size: 9px; padding: 2px 5px; background: white; border: 1px solid #81c784; border-radius: 3px; cursor: pointer; }
     .copy-val { padding: 5px; font-family: monospace; font-size: 11px; word-break: break-all; margin: 0; }
+    .section-title { font-weight: bold; margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 14px; }
+    .batch-controls { display: flex; gap: 5px; margin: 10px 0; align-items: center; }
+    .batch-btn { padding: 3px 8px; font-size: 11px; }
+    .danger-btn { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; font-size: 11px; padding: 3px 8px; margin-left: auto; }
+    #batchContainer { max-height: 250px; overflow-y: auto; border: 1px solid #eee; margin-top: 5px; }
+    .batch-item { display: flex; justify-content: space-between; align-items: center; padding: 5px; border-bottom: 1px solid #f5f5f5; font-size: 11px; }
+    .batch-item.used { opacity: 0.5; text-decoration: line-through; background: #fafafa; }
+    .batch-item-text { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 5px; }
+    .apply-btn { font-size: 10px; padding: 2px 5px; }
   </style>
 </head>
 <body>
@@ -45,6 +54,18 @@
   <div style="margin-top:10px;">
     <a href="#" id="toggleJson" style="font-size: 11px;">Show Extracted Form Context (Send to LLM)</a>
     <div id="jsonPreview"></div>
+  </div>
+
+  <div class="section-title">Batch Generation</div>
+  <div class="batch-controls">
+    <span style="font-size: 11px; color: #666;">Create:</span>
+    <button class="batch-btn" data-count="5">5</button>
+    <button class="batch-btn" data-count="10">10</button>
+    <button class="batch-btn" data-count="20">20</button>
+    <button id="clearBatchBtn" class="danger-btn">Clear Batch</button>
+  </div>
+  <div id="batchContainer">
+    <div id="batchList"></div>
   </div>
 
   <div style="margin-top:15px; border-top: 1px solid #ccc; padding-top: 10px;">
