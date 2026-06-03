@@ -12,7 +12,7 @@
       <h1>Enterprise LLM Auto-Filler Suite</h1>
       <div class="header-subtitle">Advanced OutSystems Data Synthesizer & Forms Automation Center</div>
     </div>
-    <span class="badge-premium">✨ Gemini v3.1 Enabled</span>
+    <span class="badge-premium">✨ GLM-4 Enabled</span>
   </header>
 
   <nav class="tabs">
@@ -31,10 +31,10 @@
           <div class="description-text">Configure the primary API routing and security credentials. All API keys are securely obfuscated in local extension storage.</div>
           
           <div class="form-group">
-            <label class="form-label" for="apiKey">Google Gemini API Key</label>
+            <label class="form-label" for="apiKey">ckey.vn API Key</label>
             <div class="input-with-button">
               <div class="password-wrapper">
-                <input type="password" id="apiKey" placeholder="Enter AIzaSy... API Key">
+                <input type="password" id="apiKey" placeholder="Enter sk-... API Key">
                 <button type="button" class="toggle-password-btn" id="toggleApiKey">👁️</button>
               </div>
             </div>
@@ -43,10 +43,12 @@
           <div class="form-group" style="margin-top: 15px;">
             <label class="form-label" for="modelSelect">Default Orchestrator Model</label>
             <select id="modelSelect">
-              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview (Recommended - Fast & Cost-Efficient)</option>
-              <option value="gemini-3-flash-preview">gemini-3-flash-preview (Standard Core)</option>
-              <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Stable Light)</option>
-              <option value="gemini-2.5-flash">gemini-2.5-flash (Standard Large)</option>
+              <option value="glm4.7">glm4.7</option>
+              <option value="mistral-medium-3.5-128b">mistral-medium-3.5-128b</option>
+              <option value="mistral-small-4-119b-2603">mistral-small-4-119b-2603</option>
+              <option value="qwen3-coder-480b-a35b-instruct">qwen3-coder-480b-a35b-instruct</option>
+              <option value="deepseek-r1-distill-qwen-32b">deepseek-r1-distill-qwen-32b</option>
+              <option value="deepseek-v4-flash">deepseek-v4-flash</option>
             </select>
           </div>
 
@@ -63,7 +65,7 @@
         <div class="card" style="height: fit-content;">
           <h2 class="card-title">Secured Obfuscation</h2>
           <div class="description-text" style="font-size: 11px; line-height: 1.5;">
-            This extension operates offline on your browser instance. Your API credentials are encrypted via Base-64 token hashing and only shared directly with official Google API servers (`generativelanguage.googleapis.com`). No telemetry or keys are transmitted to third parties.
+            This extension operates offline on your browser instance. Your API credentials are encrypted via Base-64 token hashing and only shared directly with the configured API endpoint (ckey.vn). No telemetry or keys are transmitted to third parties.
           </div>
           <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
             <div style="font-weight: 600; font-size: 11px; margin-bottom: 4px;">Active Connection</div>

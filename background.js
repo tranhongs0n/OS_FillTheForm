@@ -8,37 +8,29 @@
 // Centralized Application Configuration
 const CONFIG = {
   MODELS: [
-    'gemini-3.1-flash-lite-preview',
-    'gemini-3-flash-preview',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-flash'
+    'glm4.7',
+    'mistral-medium-3.5-128b',
+    'mistral-small-4-119b-2603',
+    'qwen3-coder-480b-a35b-instruct',
+    'deepseek-r1-distill-qwen-32b',
+    'deepseek-v4-flash'
   ],
   TIMEOUT_MS: 6000,
   TERMINAL_STATUSES: [400, 401, 403, 404, 429],
   
   // Default Domain instructions and definitions
   DEFAULT_DOMAIN_CONTEXT: `
-Vai trò: Chuyên gia BA/Tester dự án Hành chính công (QHS_GiamSat - Hệ thống Quản lý Hoạt động Giám sát của Quốc hội).
-Bối cảnh: Quản lý vòng đời giám sát (Đề xuất -> Lập chương trình -> Điều hòa -> Triển khai chuyên đề).
-
-Master Data & Thuật ngữ:
-1. Cơ quan (M_Agency): Ủy ban Thường vụ Quốc hội, Hội đồng Dân tộc, các Ủy ban (Pháp luật, Kinh tế, Văn hóa - Giáo dục, Xã hội...), Đoàn ĐBQH tỉnh/thành phố, Tổng Thư ký Quốc hội.
-2. Đối tượng: Chính phủ, các Bộ (Công an, GD&ĐT, Y tế...), UBND TP. Hà Nội/HCM.
-3. Chủ đề: PCCC, đổi mới sách giáo khoa, bạo lực học đường, bất động sản, ATGT.
-4. Loại văn bản (M_DocumentType): Tờ trình, Nghị quyết, Quyết định, Báo cáo, Công văn.
-5. Định dạng Số/Ký hiệu: [Số]/KH-UBTVQH15, [Số]/2026/NQ-UBTVQH15.
-6. Người dùng (MonitorUser_Extend): Họ tên tiếng Việt (Chủ nhiệm, Phó Chủ nhiệm, Ủy viên thường trực, Đại biểu Quốc hội, Chuyên viên).
+Vai trò: Chuyên gia BA/Tester chuyên nghiệp.
+Nhiệm vụ: Tạo dữ liệu kiểm thử thực tế và đa dạng cho các biểu mẫu.
 
 Ràng buộc Đa dạng (BẮT BUỘC):
 - Sử dụng đa dạng họ tên tiếng Việt (không trùng lặp trong cùng một đợt tạo).
-- Chức vụ phải phong phú: từ cấp lãnh đạo (Chủ nhiệm, Phó Chủ nhiệm) đến chuyên viên.
-- Các chuyên đề, nhiệm vụ, nội dung văn bản phải cụ thể, thực tế và không được lặp lại máy móc.
-- Phân bổ dữ liệu ngẫu nhiên nhưng phải hợp lý về mặt nghiệp vụ hành chính.
+- Chức vụ/Thông tin phải phong phú và đa dạng.
+- Các nội dung văn bản phải cụ thể, thực tế và không được lặp lại máy móc.
 
 Quy tắc dữ liệu:
-- KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp.
-- Giọng văn hành chính, trang trọng. Năm 2024-2027.
-- Hạn cuối gửi kế hoạch: 15/11 năm trước đó.
+- KHÔNG dùng "Test 1", "Nguyễn Văn A". Dùng dữ liệu thật, chuyên nghiệp và tự nhiên.
+- Năm hiện tại: 2024-2027.
 - Điền đầy đủ tất cả các trường.
 `
 };
@@ -95,9 +87,10 @@ async function performAutofill(inputs, tabId, submitAfterFill = false, pageConte
   }
   const timeoutMs = result.timeoutMs ? parseInt(result.timeoutMs) : CONFIG.TIMEOUT_MS;
 
-  for (const model of activeModels) {
+  for (let i = 0; i < activeModels.length; i++) {
+    const model = activeModels[i];
     try {
-      notifyTab(tabId, model, batchCount);
+      notifyTab(tabId, model, batchCount, i === 0);
 
       const apiKey = await getDecryptedApiKey();
       const contextSnapshot = await getContextSnapshot();
@@ -142,12 +135,33 @@ async function getPromptForUrl(url) {
   return match ? match.instruction : CONFIG.DEFAULT_DOMAIN_CONTEXT;
 }
 
+function sanitizeApiKey(key) {
+  if (typeof key !== 'string') return '';
+  return key.replace(/[^A-Za-z0-9\-_]/g, '').trim();
+}
+
 async function getDecryptedApiKey() {
-  const key = await chrome.storage.local.get(['apiKey']);
-  if (!key.apiKey) {
+  const keyResult = await chrome.storage.local.get(['apiKey']);
+  let key = keyResult.apiKey;
+  if (!key) {
     throw new Error("API Key missing. Please set it in Options.");
   }
-  return atob(key.apiKey).trim();
+  
+  try {
+    const decoded = atob(key).trim();
+    // Validate if it looks like a base64-encoded API key
+    if (decoded.startsWith("sk-") || decoded.startsWith("AIzaSy")) {
+      key = decoded;
+    }
+  } catch (e) {
+    // If decoding fails, treat the stored value itself as the plaintext key
+  }
+  
+  const sanitized = sanitizeApiKey(key);
+  if (!sanitized) {
+    throw new Error("Invalid API Key format. Please re-enter it in Options.");
+  }
+  return sanitized;
 }
 
 async function getContextSnapshot() {
@@ -155,9 +169,8 @@ async function getContextSnapshot() {
   return key.contextSnapshot || {};
 }
 
-function notifyTab(tabId, model, batchCount) {
-  const isFirstModel = CONFIG.MODELS.indexOf(model) === 0;
-  const message = isFirstModel 
+function notifyTab(tabId, model, batchCount, isFirstAttempt) {
+  const message = isFirstAttempt 
     ? (batchCount > 1 ? `Đang tạo ${batchCount} bản ghi...` : "Đang tạo dữ liệu mẫu...") 
     : `Lỗi model trước. Thử lại với ${model}...`;
     
@@ -175,7 +188,7 @@ function buildPromptText(domainContext, contextSnapshot, pageContext, inputs, ba
     Context Snapshot: ${JSON.stringify(contextSnapshot)}
 
     ${taskDescription} Điền form dựa trên label và input type.
-    Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ QHS_GiamSat.
+    Dữ liệu phải đa dạng, ngẫu nhiên và đúng nghiệp vụ thực tế.
 
     ${pageContext ? `Page Context (Tiêu đề/Heading trang): ${JSON.stringify(pageContext)}` : ''}
     Context form (Bao gồm headings xung quanh form): ${JSON.stringify(inputs)}
@@ -184,27 +197,44 @@ function buildPromptText(domainContext, contextSnapshot, pageContext, inputs, ba
     1. <select>: Chọn đúng 'value' từ 'options'.
     2. Checkbox/Radio: boolean true/false.
     3. date inputs: dùng định dạng 'YYYY-MM-DD'.
-    4. Text/Email/TextArea: Theo đúng văn phong hành chính QHS_GiamSat ở trên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
+    4. Text/Email/TextArea: Theo đúng văn phong chuyên nghiệp và tự nhiên, DỰA VÀO Page Context và Form Context để tạo dữ liệu thật sát với nội dung trang web.
     5. Output Format: Dùng 'label' làm key nếu ID/Name trông giống như mã code tự sinh (ví dụ: b21-Input_...). Nếu ID/Name rõ ràng, hãy dùng chúng.
     Ví dụ: {"Tên chuyên đề": "Giá trị...", "b21-Input_Year": 2026}
     Output: ${batchCount > 1 ? 'Một mảng JSON các đối tượng phẳng.' : 'Một đối tượng JSON phẳng.'}`;
 }
 
 async function fetchLlmResponse(model, apiKey, promptText, timeoutMs) {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const endpoint = 'https://ckey.vn/v1/chat/completions';
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs || CONFIG.TIMEOUT_MS);
 
   try {
+    const requestBody = {
+      model: model,
+      messages: [
+        {
+          role: 'user',
+          content: promptText
+        }
+      ]
+    };
+
+    // Skip thinking process for deepseek-v4-flash
+    if (model === 'deepseek-v4-flash') {
+      requestBody.thinking = {
+        type: 'disabled'
+      };
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
       signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.9 }
-      })
+      body: JSON.stringify(requestBody)
     });
     
     return await parseHttpResponse(response);
@@ -219,34 +249,49 @@ async function fetchLlmResponse(model, apiKey, promptText, timeoutMs) {
 }
 
 async function parseHttpResponse(response) {
-  let data;
-  try {
-    data = await response.json();
-  } catch (e) {
-    if (!response.ok) {
-      const err = new Error(`Gemini API Error (${response.status}): ${response.statusText || 'Non-JSON response'}`);
-      err.status = response.status;
-      throw err;
-    }
-    throw new Error("Failed to parse response from Gemini API");
-  }
-
+  const contentType = response.headers.get('content-type') || '';
+  
   if (!response.ok) {
-    const errorMsg = data.error?.message || response.statusText || `HTTP error ${response.status}`;
-    const err = new Error(`Gemini API Error (${response.status}): ${errorMsg}`);
+    let errorMsg = '';
+    if (contentType.includes('application/json')) {
+      try {
+        const data = await response.json();
+        errorMsg = data.error?.message || response.statusText || `HTTP error ${response.status}`;
+      } catch (e) {
+        errorMsg = `Failed to parse JSON error: ${response.statusText || 'Unknown error'}`;
+      }
+    } else {
+      try {
+        const text = await response.text();
+        // Remove HTML tags, multiple spaces, and trim to extract clean text
+        const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        // Limit error message length for display neatness
+        errorMsg = cleanText.substring(0, 150) || response.statusText || 'Non-JSON response';
+      } catch (e) {
+        errorMsg = response.statusText || 'Non-JSON response';
+      }
+    }
+    const err = new Error(`LLM API Error (${response.status}): ${errorMsg}`);
     err.status = response.status;
     throw err;
   }
 
-  return data;
+  try {
+    return await response.json();
+  } catch (e) {
+    throw new Error("Failed to parse successful response from LLM API as JSON");
+  }
 }
 
 function extractJsonFromResponse(data) {
-  if (!data.candidates || !data.candidates[0].content.parts[0].text) {
-    throw new Error("Invalid response structure from Gemini API");
+  if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+    throw new Error("Invalid response structure from LLM API");
   }
   
-  const text = data.candidates[0].content.parts[0].text;
+  let text = data.choices[0].message.content;
+  
+  // Strip <think>...</think> blocks if present (handles closed and unclosed tags)
+  text = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
   
   // Strip markdown code blocks
   let cleaned = text.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1').trim();

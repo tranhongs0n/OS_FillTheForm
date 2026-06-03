@@ -103,17 +103,33 @@ function setupTabs() {
 // -------------------------------------------------------------------------
 // Tab 1: General Settings Management
 // -------------------------------------------------------------------------
+function sanitizeApiKey(key) {
+  if (typeof key !== 'string') return '';
+  return key.replace(/[^A-Za-z0-9\-_]/g, '').trim();
+}
+
 function setupSettingsTab() {
   // Load initial settings
   chrome.storage.local.get(['apiKey', 'selectedModel', 'timeoutMs'], (result) => {
     if (result.apiKey) {
+      let key = result.apiKey;
       try {
-        DOM.apiKeyInput.value = atob(result.apiKey);
+        const decoded = atob(key).trim();
+        // Check if it's indeed standard base64 encoded API key
+        if (decoded.startsWith("sk-") || decoded.startsWith("AIzaSy")) {
+          key = decoded;
+        }
+      } catch (e) {
+        // Fallback to plaintext
+      }
+      
+      const sanitized = sanitizeApiKey(key);
+      if (sanitized) {
+        DOM.apiKeyInput.value = sanitized;
         DOM.connStatus.textContent = "Obfuscated & Active";
         DOM.connStatus.className = "badge badge-success";
-      } catch (e) {
-        DOM.apiKeyInput.value = result.apiKey;
-        DOM.connStatus.textContent = "Active (Plaintext)";
+      } else {
+        DOM.connStatus.textContent = "Invalid API Key";
         DOM.connStatus.className = "badge badge-warning";
       }
     } else {
@@ -139,8 +155,24 @@ function setupSettingsTab() {
 
   // Save Settings
   DOM.saveSettingsBtn.addEventListener('click', () => {
-    const key = DOM.apiKeyInput.value.trim();
-    const obfuscated = key ? btoa(key) : '';
+    const rawKey = DOM.apiKeyInput.value.trim();
+    const sanitizedKey = sanitizeApiKey(rawKey);
+    
+    if (rawKey && !sanitizedKey) {
+      showToast("Invalid API Key format! It must contain only letters, numbers, hyphens, and underscores.", true);
+      return;
+    }
+    
+    let obfuscated = '';
+    if (sanitizedKey) {
+      try {
+        obfuscated = btoa(sanitizedKey);
+      } catch (err) {
+        showToast("Encoding error: " + err.message, true);
+        return;
+      }
+    }
+    
     const model = DOM.modelSelect.value;
     const timeout = parseInt(DOM.timeoutInput.value) || 6000;
     
@@ -149,7 +181,8 @@ function setupSettingsTab() {
       selectedModel: model,
       timeoutMs: timeout
     }, () => {
-      if (key) {
+      if (sanitizedKey) {
+        DOM.apiKeyInput.value = sanitizedKey;
         DOM.connStatus.textContent = "Obfuscated & Active";
         DOM.connStatus.className = "badge badge-success";
       } else {
